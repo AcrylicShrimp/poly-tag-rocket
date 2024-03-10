@@ -17,7 +17,7 @@ pub fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     let database_name =
         db::test::create_test_database(&database_url_base, &maintenance_database_name, &id)
             .unwrap();
-    let rocket = create_rocket_instance(&database_name).unwrap();
+    let rocket = create_rocket_instance(false, &database_name).unwrap();
     let database_dropper = DatabaseDropper::new(
         &database_url_base,
         &maintenance_database_name,

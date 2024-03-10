@@ -45,8 +45,13 @@ fn setup_logger() -> Result<(), fern::InitError> {
 /// Creates a new Rocket instance.
 /// It runs the migrations and creates a database connection pool.
 /// The result Rocket instance has all the services and routes registered.
-pub fn create_rocket_instance(database_name: &str) -> Result<Rocket<Build>, AppError> {
-    setup_logger()?;
+pub fn create_rocket_instance(
+    with_logger: bool,
+    database_name: &str,
+) -> Result<Rocket<Build>, AppError> {
+    if with_logger {
+        setup_logger()?;
+    }
 
     let database_url_base =
         std::env::var("DATABASE_URL_BASE").expect("DATABASE_URL_BASE must be set");
@@ -72,7 +77,7 @@ async fn main() -> Result<(), AppError> {
         std::env::var("LIVE_DATABASE_NAME").expect("LIVE_DATABASE_NAME must be set");
 
     info!("creating rocket");
-    let rocket = create_rocket_instance(&live_database_name)?;
+    let rocket = create_rocket_instance(true, &live_database_name)?;
 
     info!("launching rocket");
     let _rocket = rocket.launch().await?;
