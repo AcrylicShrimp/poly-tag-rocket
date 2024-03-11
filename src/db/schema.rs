@@ -23,7 +23,16 @@ diesel::table! {
         mime -> Text,
         size -> Int8,
         hash -> Int8,
-        created_at -> Timestamp,
+        uploaded_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    staging_files (id) {
+        id -> Uuid,
+        name -> Text,
+        mime -> Nullable<Text>,
+        staged_at -> Timestamp,
     }
 }
 
@@ -53,6 +62,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     collection_file_pairs,
     collections,
     files,
+    staging_files,
     user_sessions,
     users,
 );

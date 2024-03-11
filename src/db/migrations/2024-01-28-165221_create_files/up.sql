@@ -6,5 +6,5 @@ CREATE TABLE files (
   mime TEXT NOT NULL,
   size BIGINT NOT NULL,
   hash BIGINT NOT NULL, -- sha256
-  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+  uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
