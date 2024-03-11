@@ -61,7 +61,7 @@ impl UserService {
         Ok(user)
     }
 
-    /// Removes a user from the database by their ID.
+    /// Removes a user by their ID.
     /// Returns the user that was removed, or `None` if the user was not found.
     pub async fn remove_user_by_id(&self, user_id: i32) -> Result<Option<User>, UserServiceError> {
         use crate::db::schema;
@@ -82,7 +82,7 @@ impl UserService {
         Ok(deleted_user)
     }
 
-    /// Removes a user from the database by their email.
+    /// Removes a user by their email.
     /// Returns the user that was removed, or `None` if the user was not found.
     pub async fn remove_user_by_email(
         &self,
@@ -106,8 +106,9 @@ impl UserService {
         Ok(deleted_user)
     }
 
-    /// Retrieves a list of users from the database.
-    /// The `last_id` parameter is used to determine the starting point for the query.
+    /// Retrieves a list of users.
+    /// The result will be sorted by user ID in ascending order.
+    /// If `last_user_id` is provided, the result will start after the user with that ID.
     pub async fn get_users(
         &self,
         last_user_id: Option<i32>,
@@ -132,7 +133,7 @@ impl UserService {
         Ok(users)
     }
 
-    /// Retrieves a user from the database by their ID.
+    /// Retrieves a user by their ID.
     pub async fn get_user_by_id(&self, user_id: i32) -> Result<Option<User>, UserServiceError> {
         use crate::db::schema;
 
@@ -152,7 +153,7 @@ impl UserService {
         Ok(user)
     }
 
-    /// Retrieves a user from the database by their email.
+    /// Retrieves a user by their email.
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, UserServiceError> {
         use crate::db::schema;
 
