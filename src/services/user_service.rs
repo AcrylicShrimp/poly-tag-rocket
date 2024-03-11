@@ -124,8 +124,8 @@ impl UserService {
                 schema::users::email,
                 schema::users::joined_at,
             ))
-            .limit(limit as i64)
             .order(schema::users::id.asc())
+            .limit(limit as i64)
             .load::<User>(db)
             .await?;
 
