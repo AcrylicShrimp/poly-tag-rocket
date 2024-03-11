@@ -53,10 +53,10 @@ impl From<UserServiceError> for Error {
 async fn create_user(
     #[allow(unused_variables)] user_session: UserSession,
     user_service: &State<Arc<UserService>>,
-    user: Json<CreatingUser>,
+    user: Json<CreatingUser<'_>>,
 ) -> Result<(Status, Json<User>), Error> {
     let user = user_service
-        .create_user(&user.username, &user.email, &user.password)
+        .create_user(user.username, user.email, user.password)
         .await?;
 
     Ok((Status::Created, Json(user)))
@@ -123,10 +123,10 @@ async fn set_user_username(
     #[allow(unused_variables)] user_session: UserSession,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
-    username: Json<SettingUserUsername>,
+    username: Json<SettingUserUsername<'_>>,
 ) -> Result<(Status, Json<User>), Error> {
     let user = user_service
-        .set_user_username_by_id(user_id, &username.username)
+        .set_user_username_by_id(user_id, username.username)
         .await?;
     let user = match user {
         Some(user) => user,
@@ -143,10 +143,10 @@ async fn set_user_password(
     #[allow(unused_variables)] user_session: UserSession,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
-    password: Json<SettingUserPassword>,
+    password: Json<SettingUserPassword<'_>>,
 ) -> Result<(Status, Json<User>), Error> {
     let user = user_service
-        .set_user_password_by_id(user_id, &password.password)
+        .set_user_password_by_id(user_id, password.password)
         .await?;
     let user = match user {
         Some(user) => user,

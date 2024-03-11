@@ -55,9 +55,9 @@ async fn test_create_user() {
         ))
         .body(
             serde_json::to_string(&CreatingUser {
-                username: username.to_owned(),
-                email: email.to_owned(),
-                password: password.to_owned(),
+                username,
+                email,
+                password,
             })
             .unwrap(),
         )
@@ -223,7 +223,7 @@ async fn test_set_user_username() {
         ))
         .body(
             serde_json::to_string(&SettingUserUsername {
-                username: new_username.to_owned(),
+                username: new_username,
             })
             .unwrap(),
         )
@@ -271,7 +271,7 @@ async fn test_set_user_password() {
         ))
         .body(
             serde_json::to_string(&SettingUserPassword {
-                password: new_password.to_owned(),
+                password: new_password,
             })
             .unwrap(),
         )
