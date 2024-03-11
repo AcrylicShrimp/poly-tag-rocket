@@ -33,7 +33,7 @@ async fn create_initial_user(
 
 #[rocket::async_test]
 async fn test_create_user() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
@@ -82,7 +82,7 @@ async fn test_create_user() {
 
 #[rocket::async_test]
 async fn test_remove_user() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
@@ -116,7 +116,7 @@ async fn test_remove_user() {
 
 #[rocket::async_test]
 async fn test_get_users() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
@@ -164,7 +164,7 @@ async fn test_get_users() {
 
 #[rocket::async_test]
 async fn test_get_user() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
@@ -202,7 +202,7 @@ async fn test_get_user() {
 
 #[rocket::async_test]
 async fn test_set_user_username() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
@@ -250,7 +250,7 @@ async fn test_set_user_username() {
 
 #[rocket::async_test]
 async fn test_set_user_password() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let user_service = client.rocket().state::<Arc<UserService>>().unwrap();

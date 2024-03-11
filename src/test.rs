@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 /// Creates a new Rocket instance for testing.
 /// It creates a new database for the test and runs the migrations.
-pub fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
+pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     let database_url_base =
         std::env::var("DATABASE_URL_BASE").expect("DATABASE_URL_BASE must be set");
     let maintenance_database_name =
@@ -17,7 +17,7 @@ pub fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     let database_name =
         db::test::create_test_database(&database_url_base, &maintenance_database_name, &id)
             .unwrap();
-    let rocket = create_rocket_instance(false, &database_name).unwrap();
+    let rocket = create_rocket_instance(false, &database_name).await.unwrap();
     let database_dropper = DatabaseDropper::new(
         &database_url_base,
         &maintenance_database_name,

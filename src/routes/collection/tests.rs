@@ -33,7 +33,7 @@ async fn create_initial_user(
 
 #[rocket::async_test]
 async fn test_create_collection() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
@@ -81,7 +81,7 @@ async fn test_create_collection() {
 
 #[rocket::async_test]
 async fn test_remove_collection() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
@@ -122,7 +122,7 @@ async fn test_remove_collection() {
 
 #[rocket::async_test]
 async fn test_get_collections() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
@@ -179,7 +179,7 @@ async fn test_get_collections() {
 
 #[rocket::async_test]
 async fn test_get_collection() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
@@ -221,7 +221,7 @@ async fn test_get_collection() {
 
 #[rocket::async_test]
 async fn test_update_collection() {
-    let (rocket, _database_dropper) = create_test_rocket_instance();
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
     let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
     let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
