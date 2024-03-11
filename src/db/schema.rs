@@ -2,15 +2,14 @@
 
 diesel::table! {
     collection_file_pairs (collection_id, file_id) {
-        collection_id -> Int4,
-        file_id -> Int4,
+        collection_id -> Uuid,
+        file_id -> Uuid,
     }
 }
 
 diesel::table! {
     collections (id) {
-        id -> Int4,
-        uuid -> Uuid,
+        id -> Uuid,
         name -> Text,
         description -> Nullable<Text>,
         created_at -> Timestamp,
@@ -19,8 +18,7 @@ diesel::table! {
 
 diesel::table! {
     files (id) {
-        id -> Int4,
-        uuid -> Uuid,
+        id -> Uuid,
         name -> Text,
         mime -> Nullable<Text>,
         size -> Nullable<Int8>,
