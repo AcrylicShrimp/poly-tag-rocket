@@ -80,3 +80,26 @@ pub struct CreatingUserSession<'a> {
     pub user_id: i32,
     pub token: &'a str,
 }
+
+#[derive(Serialize, Deserialize, Selectable, Queryable, Identifiable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::files)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
+pub struct File {
+    pub id: Uuid,
+    pub name: String,
+    pub mime: String,
+    pub size: i64,
+    pub hash: i64,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Serialize, Deserialize, Insertable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::files)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CreatingFile<'a> {
+    pub name: &'a str,
+    pub mime: &'a str,
+    pub size: i64,
+    pub hash: i64,
+}

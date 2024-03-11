@@ -1,7 +1,6 @@
+use crate::dto::StaticError;
 use rocket::{routes, Build, Responder, Rocket};
 use thiserror::Error;
-
-use crate::dto::StaticError;
 
 pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket.mount("/files", routes![])

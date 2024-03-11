@@ -20,9 +20,9 @@ diesel::table! {
     files (id) {
         id -> Uuid,
         name -> Text,
-        mime -> Nullable<Text>,
-        size -> Nullable<Int8>,
-        hash -> Nullable<Int8>,
+        mime -> Text,
+        size -> Int8,
+        hash -> Int8,
         created_at -> Timestamp,
     }
 }
