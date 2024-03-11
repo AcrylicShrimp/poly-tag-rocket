@@ -9,15 +9,15 @@ edition = "2021"
 argon2 = { version = "0.5", features = ["std"] }
 base64 = { version = "0.22" }
 chrono = { version = "0.4", features = ["serde"] }
-diesel = { version = "2", features = ["postgres", "chrono"] }
+diesel = { version = "2", features = ["postgres", "chrono", "uuid"] }
 diesel-async = { version = "0.4", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2", features = ["postgres"] }
 fern = { version = "0.6" }
 humantime = { version = "2" }
 log = { version = "0.4" }
-rocket = { version = "0.5", features = ["json"] }
+rocket = { version = "0.5", features = ["json", "uuid"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 thiserror = { version = "1" }
 utoipa = { version = "4", features = ["rocket_extras", "uuid", "chrono"] }
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
