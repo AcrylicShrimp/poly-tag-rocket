@@ -82,30 +82,6 @@ impl UserService {
         Ok(deleted_user)
     }
 
-    /// Removes a user by their email.
-    /// Returns the user that was removed, or `None` if the user was not found.
-    pub async fn remove_user_by_email(
-        &self,
-        email: &str,
-    ) -> Result<Option<User>, UserServiceError> {
-        use crate::db::schema;
-
-        let db = &mut self.db_pool.get().await?;
-        let deleted_user =
-            diesel::delete(schema::users::dsl::users.filter(schema::users::email.eq(email)))
-                .returning((
-                    schema::users::id,
-                    schema::users::username,
-                    schema::users::email,
-                    schema::users::joined_at,
-                ))
-                .get_result::<User>(db)
-                .await
-                .optional()?;
-
-        Ok(deleted_user)
-    }
-
     /// Retrieves a list of users.
     /// The result will be sorted by user ID in ascending order.
     /// If `last_user_id` is provided, the result will start after the user with that ID.
@@ -140,26 +116,6 @@ impl UserService {
         let db = &mut self.db_pool.get().await?;
         let user = schema::users::dsl::users
             .filter(schema::users::id.eq(user_id))
-            .select((
-                schema::users::id,
-                schema::users::username,
-                schema::users::email,
-                schema::users::joined_at,
-            ))
-            .first::<User>(db)
-            .await
-            .optional()?;
-
-        Ok(user)
-    }
-
-    /// Retrieves a user by their email.
-    pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, UserServiceError> {
-        use crate::db::schema;
-
-        let db = &mut self.db_pool.get().await?;
-        let user = schema::users::dsl::users
-            .filter(schema::users::email.eq(email))
             .select((
                 schema::users::id,
                 schema::users::username,
