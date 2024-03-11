@@ -77,7 +77,7 @@ async fn main() -> Result<(), AppError> {
         std::env::var("LIVE_DATABASE_NAME").expect("LIVE_DATABASE_NAME must be set");
 
     info!("creating rocket");
-    let rocket = create_rocket_instance(true, &live_database_name)?;
+    let rocket = create_rocket_instance(false, &live_database_name)?;
 
     info!("launching rocket");
     let _rocket = rocket.launch().await?;
