@@ -2,7 +2,7 @@ use super::dto::{CreatingUser, SettingUserPassword, SettingUserUsername, UserLis
 use crate::{
     db::models::User,
     dto::StaticError,
-    guards::UserSession,
+    guards::AuthUserSession,
     services::{UserService, UserServiceError},
 };
 use rocket::{
@@ -51,7 +51,7 @@ impl From<UserServiceError> for Error {
 
 #[post("/", data = "<user>")]
 async fn create_user(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     user: Json<CreatingUser<'_>>,
 ) -> Result<(Status, Json<User>), Error> {
@@ -64,7 +64,7 @@ async fn create_user(
 
 #[delete("/<user_id>")]
 async fn remove_user(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
 ) -> Result<(Status, Json<User>), Error> {
@@ -81,7 +81,7 @@ async fn remove_user(
 
 #[get("/?<last_user_id>&<limit>")]
 async fn get_users(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     last_user_id: Option<i32>,
     limit: Option<u32>,
@@ -103,7 +103,7 @@ async fn get_users(
 
 #[get("/<user_id>")]
 async fn get_user(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
 ) -> Result<(Status, Json<User>), Error> {
@@ -120,7 +120,7 @@ async fn get_user(
 
 #[put("/<user_id>/username", data = "<username>")]
 async fn set_user_username(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
     username: Json<SettingUserUsername<'_>>,
@@ -140,7 +140,7 @@ async fn set_user_username(
 
 #[put("/<user_id>/password", data = "<password>")]
 async fn set_user_password(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     user_service: &State<Arc<UserService>>,
     user_id: i32,
     password: Json<SettingUserPassword<'_>>,

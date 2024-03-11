@@ -2,7 +2,7 @@ use super::dto::{CollectionList, CreatingCollection, UpdatingCollection};
 use crate::{
     db::models::Collection,
     dto::StaticError,
-    guards::UserSession,
+    guards::AuthUserSession,
     services::{CollectionService, CollectionServiceError},
 };
 use rocket::{
@@ -51,7 +51,7 @@ impl From<CollectionServiceError> for Error {
 
 #[post("/", data = "<collection>")]
 async fn create_collection(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
     collection: Json<CreatingCollection<'_>>,
 ) -> Result<(Status, Json<Collection>), Error> {
@@ -64,7 +64,7 @@ async fn create_collection(
 
 #[delete("/<collection_id>")]
 async fn remove_collection(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
     collection_id: Uuid,
 ) -> Result<(Status, Json<Collection>), Error> {
@@ -83,7 +83,7 @@ async fn remove_collection(
 
 #[get("/?<last_collection_id>&<limit>")]
 async fn get_collections(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
     last_collection_id: Option<Uuid>,
     limit: Option<u32>,
@@ -107,7 +107,7 @@ async fn get_collections(
 
 #[get("/<collection_id>")]
 async fn get_collection(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
     collection_id: Uuid,
 ) -> Result<(Status, Json<Collection>), Error> {
@@ -126,7 +126,7 @@ async fn get_collection(
 
 #[put("/<collection_id>", data = "<collection>")]
 async fn update_collection(
-    #[allow(unused_variables)] user_session: UserSession,
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
     collection_id: Uuid,
     collection: Json<UpdatingCollection<'_>>,

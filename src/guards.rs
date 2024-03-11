@@ -29,8 +29,9 @@ impl GuardError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct UserSession {
+pub struct AuthUserSession<'a> {
     pub user: User,
+    pub token: &'a str,
 }
 
 fn parse_authorization_header(authorization: &str) -> Option<&str> {
@@ -44,7 +45,7 @@ fn parse_authorization_header(authorization: &str) -> Option<&str> {
 }
 
 #[rocket::async_trait]
-impl<'r> FromRequest<'r> for UserSession {
+impl<'r> FromRequest<'r> for AuthUserSession<'r> {
     type Error = GuardError;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
@@ -83,6 +84,6 @@ impl<'r> FromRequest<'r> for UserSession {
             }
         };
 
-        Outcome::Success(UserSession { user })
+        Outcome::Success(AuthUserSession { user, token })
     }
 }
