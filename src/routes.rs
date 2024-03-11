@@ -5,5 +5,7 @@ pub mod user;
 use rocket::{Build, Rocket};
 
 pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
-    user::controllers::register_routes(rocket)
+    let rocket = collection::controllers::register_routes(rocket);
+    let rocket = user::controllers::register_routes(rocket);
+    rocket
 }

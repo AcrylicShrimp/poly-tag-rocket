@@ -1,6 +1,37 @@
 use chrono::NaiveDateTime;
-use diesel::{associations::Identifiable, deserialize::Queryable, prelude::Insertable, Selectable};
+use diesel::{
+    associations::Identifiable, deserialize::Queryable, prelude::Insertable,
+    query_builder::AsChangeset, Selectable,
+};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+#[derive(Serialize, Deserialize, Selectable, Queryable, Identifiable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::collections)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[serde(rename_all = "camelCase")]
+pub struct Collection {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Serialize, Deserialize, Insertable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::collections)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CreatingCollection<'a> {
+    pub name: &'a str,
+    pub description: Option<&'a str>,
+}
+
+#[derive(Serialize, Deserialize, AsChangeset, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::collections)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct UpdatingCollection<'a> {
+    pub name: &'a str,
+    pub description: Option<&'a str>,
+}
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Identifiable, Debug, Clone, PartialEq)]
 #[diesel(table_name = crate::db::schema::users)]
