@@ -1,4 +1,4 @@
-use super::dto::{CreatingCollection, UpdatingCollection};
+use super::dto::{CollectionList, CreatingCollection, UpdatingCollection};
 use crate::{
     db::models::Collection,
     dto::StaticError,
@@ -87,7 +87,7 @@ async fn get_collections(
     collection_service: &State<Arc<CollectionService>>,
     last_collection_id: Option<Uuid>,
     limit: Option<u32>,
-) -> Result<(Status, Json<Vec<Collection>>), Error> {
+) -> Result<(Status, Json<CollectionList>), Error> {
     let limit = limit.unwrap_or_else(|| 25);
     let limit = u32::max(1, limit);
     let limit = u32::min(limit, 100);
@@ -95,7 +95,14 @@ async fn get_collections(
         .get_collections(last_collection_id, limit)
         .await?;
 
-    Ok((Status::Ok, Json(collections)))
+    Ok((
+        Status::Ok,
+        Json(CollectionList {
+            collections,
+            last_collection_id,
+            limit,
+        }),
+    ))
 }
 
 #[get("/<collection_id>")]

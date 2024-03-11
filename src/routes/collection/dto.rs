@@ -1,5 +1,6 @@
 use crate::db::models::Collection;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub struct CreatingCollection<'a> {
@@ -16,6 +17,6 @@ pub struct UpdatingCollection<'a> {
 #[derive(Serialize, Deserialize)]
 pub struct CollectionList {
     pub collections: Vec<Collection>,
-    pub last_collection_id: Option<i32>,
+    pub last_collection_id: Option<Uuid>,
     pub limit: u32,
 }
