@@ -1,0 +1,17 @@
+{
+  "address": "127.0.0.1",
+  "port": 8000,
+  "file_base_path": "uploads",
+  "temp_base_path": "temp",
+  "database_url_base": "postgres://user:password@localhost:5432",
+  "database_name": "file_server",
+  "limits": {
+    "form": "32KiB",
+    "data_form": "2MiB",
+    "file": "1MiB",
+    "string": "8KiB",
+    "bytes": "8KiB",
+    "json": "1MiB",
+    "msgpack": "1MiB"
+  }
+}

@@ -1,0 +1,30 @@
+# The address to bind the server to.
+address: 127.0.0.1
+
+# The port to bind the server to.
+port: 8000
+
+# The base path for the file storage.
+file_base_path: uploads
+
+# The base path for temporary files.
+temp_base_path: temp
+
+# The base URL for the database, without the database name.
+# The database must be a PostgreSQL database.
+# e.g. `postgres://user:password@localhost:5432`
+database_url_base: postgres://user:password@localhost:5432
+
+# The name of the database to use.
+# The database must be exist and be empty.
+database_name: file_server
+
+# The limits for the application.
+limits:
+  form: 32KiB
+  data_form: 2MiB
+  file: 1MiB
+  string: 8KiB
+  bytes: 8KiB
+  json: 1MiB
+  msgpack: 1MiB
