@@ -14,11 +14,38 @@ use std::{
 };
 
 #[derive(Deserialize, Debug)]
+pub struct AppLimit {
+    pub form: ByteUnit,
+    pub data_form: ByteUnit,
+    pub file: ByteUnit,
+    pub string: ByteUnit,
+    pub bytes: ByteUnit,
+    pub json: ByteUnit,
+    pub msgpack: ByteUnit,
+}
+
+impl Default for AppLimit {
+    fn default() -> Self {
+        Self {
+            form: Limits::FORM,
+            data_form: Limits::DATA_FORM,
+            file: Limits::FILE,
+            string: Limits::STRING,
+            bytes: Limits::BYTES,
+            json: Limits::JSON,
+            msgpack: Limits::MESSAGE_PACK,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
 pub struct AppConfig {
     /// The address to bind the server to.
-    pub address: Option<IpAddr>,
+    #[serde(default = "defaults::address")]
+    pub address: IpAddr,
     /// The port to bind the server to.
-    pub port: Option<u16>,
+    #[serde(default = "defaults::port")]
+    pub port: u16,
     /// The base path for the file storage.
     pub file_base_path: PathBuf,
     /// The base path for temporary files.
@@ -31,25 +58,33 @@ pub struct AppConfig {
     /// The name of the database to use.
     /// The database must be exist and be empty.
     pub database_name: String,
-    #[cfg(test)]
     /// **DEVELOPMENT ENVIRONMENT ONLY**
     ///
     /// The name of the default or maintenance database in PostgreSQL.
     /// It is used to create databases during tests.
-    pub maintenance_database_name: Option<String>,
+    #[cfg(test)]
+    #[serde(default = "defaults::maintenance_database_name")]
+    pub maintenance_database_name: String,
     /// The limits for the application.
-    pub limits: Option<AppLimit>,
+    #[serde(default)]
+    pub limits: AppLimit,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct AppLimit {
-    pub form: Option<ByteUnit>,
-    pub data_form: Option<ByteUnit>,
-    pub file: Option<ByteUnit>,
-    pub string: Option<ByteUnit>,
-    pub bytes: Option<ByteUnit>,
-    pub json: Option<ByteUnit>,
-    pub msgpack: Option<ByteUnit>,
+mod defaults {
+    use std::net::IpAddr;
+
+    pub fn address() -> IpAddr {
+        IpAddr::from([127, 0, 0, 1])
+    }
+
+    pub fn port() -> u16 {
+        8000
+    }
+
+    #[cfg(test)]
+    pub fn maintenance_database_name() -> String {
+        "postgres".to_owned()
+    }
 }
 
 impl AppConfig {
@@ -86,46 +121,25 @@ impl AppConfig {
     pub fn make_rocket_config(&self) -> Config {
         let mut config = Config::default();
 
-        if let Some(address) = self.address {
-            config.address = address;
-        }
-
-        if let Some(port) = self.port {
-            config.port = port;
-        }
-
+        config.address = self.address;
+        config.port = self.port;
         config.temp_dir = self.temp_base_path.clone().into();
-
-        let mut limits = Limits::default();
-
-        if let Some(app_limits) = &self.limits {
-            if let Some(form) = app_limits.form {
-                limits = limits.limit("form", form);
-            }
-            if let Some(data_form) = app_limits.data_form {
-                limits = limits.limit("data-form", data_form);
-            }
-            if let Some(file) = app_limits.file {
-                limits = limits.limit("file", file);
-            }
-            if let Some(string) = app_limits.string {
-                limits = limits.limit("string", string);
-            }
-            if let Some(bytes) = app_limits.bytes {
-                limits = limits.limit("bytes", bytes);
-            }
-            if let Some(json) = app_limits.json {
-                limits = limits.limit("json", json);
-            }
-            if let Some(msgpack) = app_limits.msgpack {
-                limits = limits.limit("msgpack", msgpack);
-            }
-        }
-
-        config.limits = limits;
+        config.limits = self.make_limits();
         config.ident = Ident::none();
         config.keep_alive = 60;
 
         config
+    }
+
+    fn make_limits(&self) -> Limits {
+        let mut limits = Limits::new();
+        limits = limits.limit("form", self.limits.form);
+        limits = limits.limit("data-form", self.limits.data_form);
+        limits = limits.limit("file", self.limits.file);
+        limits = limits.limit("string", self.limits.string);
+        limits = limits.limit("bytes", self.limits.bytes);
+        limits = limits.limit("json", self.limits.json);
+        limits = limits.limit("msgpack", self.limits.msgpack);
+        limits
     }
 }

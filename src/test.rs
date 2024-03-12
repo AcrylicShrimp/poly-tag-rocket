@@ -14,7 +14,7 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     let mut app_config = AppConfig::load(None as Option<PathBuf>).unwrap();
 
     let database_url_base = app_config.database_url_base.clone();
-    let maintenance_database_name = app_config.maintenance_database_name.clone().unwrap();
+    let maintenance_database_name = app_config.maintenance_database_name.clone();
     let id = Uuid::new_v4().to_string();
 
     let database_name =
