@@ -14,7 +14,7 @@ enum Error {
     NotFoundError(StaticError),
     #[response(status = 500)]
     #[error("internal server error")]
-    FileServiceError(StaticError),
+    InternalServerError(StaticError),
 }
 
 impl Error {

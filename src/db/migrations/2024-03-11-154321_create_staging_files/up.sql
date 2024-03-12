@@ -7,3 +7,5 @@ CREATE TABLE staging_files (
   size BIGINT NOT NULL,
   staged_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX ON staging_files(staged_at);

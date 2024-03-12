@@ -1,13 +1,15 @@
+use super::{FileDriver, WriteError};
 use crate::db::models::{CreatingStagingFile, StagingFile};
 use chrono::{Duration, Utc};
-use diesel::{query_dsl::methods::LockingDsl, ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
     pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
     AsyncPgConnection, RunQueryDsl,
 };
-use rocket::fs::TempFile;
+use rocket::data::DataStream;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::task::JoinSet;
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
@@ -20,11 +22,18 @@ pub enum StagingFileServiceError {
 
 pub struct StagingFileService {
     db_pool: Pool<AsyncPgConnection>,
+    file_driver: Arc<dyn FileDriver + Send + Sync>,
 }
 
 impl StagingFileService {
-    pub fn new(db_pool: Pool<AsyncPgConnection>) -> Arc<Self> {
-        Arc::new(Self { db_pool })
+    pub fn new(
+        db_pool: Pool<AsyncPgConnection>,
+        file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            db_pool,
+            file_driver,
+        })
     }
 
     /// Creates a new staging file.
@@ -58,9 +67,9 @@ impl StagingFileService {
     pub async fn fill_staging_file_by_id(
         &self,
         staging_file_id: Uuid,
-        mut temp_file: TempFile<'_>,
         offset: Option<u64>,
-    ) -> Result<Option<StagingFile>, StagingFileServiceError> {
+        stream: DataStream<'_>,
+    ) -> Result<Result<Option<StagingFile>, WriteError>, StagingFileServiceError> {
         use crate::db::schema;
 
         let db = &mut self.db_pool.get().await?;
@@ -76,20 +85,21 @@ impl StagingFileService {
                 let staging_file_id = match staging_file_id {
                     Some(staging_file_id) => staging_file_id,
                     None => {
-                        return Ok(None);
+                        return Ok(Ok(None));
                     }
                 };
 
-                async fn write_file_somewhere(
-                    id: Uuid,
-                    temp_file: &mut TempFile<'_>,
-                    offset: Option<u64>,
-                ) -> Result<i64, StagingFileServiceError> {
-                    todo!()
-                }
+                let result = self
+                    .file_driver
+                    .write_staging(staging_file_id, offset.unwrap_or(0), stream)
+                    .await;
+                let size = match result {
+                    Ok(size) => size,
+                    Err(err) => {
+                        return Ok(Err(err));
+                    }
+                };
 
-                let size: i64 =
-                    write_file_somewhere(staging_file_id, &mut temp_file, offset).await?;
                 let staging_file = diesel::update(
                     schema::staging_files::dsl::staging_files
                         .filter(schema::staging_files::id.eq(staging_file_id)),
@@ -105,7 +115,7 @@ impl StagingFileService {
                 .get_result::<StagingFile>(db)
                 .await?;
 
-                Ok(Some(staging_file))
+                Ok(Ok(Some(staging_file)))
             }
             .scope_boxed()
         })
@@ -155,6 +165,7 @@ impl StagingFileService {
     pub async fn remove_expired_staging_files(
         &self,
         duration: Duration,
+        limit: u32,
     ) -> Result<usize, StagingFileServiceError> {
         use crate::db::schema;
 
@@ -162,13 +173,41 @@ impl StagingFileService {
         let expiration_time = now - duration;
 
         let db = &mut self.db_pool.get().await?;
+        let expired_staging_file_ids = schema::staging_files::dsl::staging_files
+            .filter(schema::staging_files::staged_at.lt(expiration_time))
+            .select(schema::staging_files::id)
+            .order((
+                schema::staging_files::staged_at.asc(),
+                schema::staging_files::id.asc(),
+            ))
+            .limit(limit as i64)
+            .load::<Uuid>(db)
+            .await?;
         let expired_staging_files = diesel::delete(
             schema::staging_files::dsl::staging_files
-                .filter(schema::staging_files::staged_at.lt(expiration_time)),
+                .filter(schema::staging_files::id.eq_any(expired_staging_file_ids)),
         )
-        .execute(db)
+        .returning(schema::staging_files::id)
+        .get_results::<Uuid>(db)
         .await?;
 
-        Ok(expired_staging_files)
+        let mut removal_tasks = JoinSet::new();
+
+        async fn remove_staging_file(
+            file_driver: Arc<dyn FileDriver + Send + Sync>,
+            staging_file_id: Uuid,
+        ) {
+            file_driver.remove_staging(staging_file_id).await.ok();
+        }
+
+        for staging_file_id in &expired_staging_files {
+            let file_driver = self.file_driver.clone();
+            let task = remove_staging_file(file_driver, *staging_file_id);
+            removal_tasks.spawn_local(task);
+        }
+
+        removal_tasks.detach_all();
+
+        Ok(expired_staging_files.len())
     }
 }

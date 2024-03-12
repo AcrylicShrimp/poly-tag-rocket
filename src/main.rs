@@ -13,7 +13,7 @@ use clap::{Arg, ArgAction, Command, ValueHint};
 use const_format::formatcp;
 use dto::Error;
 use rocket::{catch, catchers, http::Status, serde::json::Json, Build, Request, Rocket};
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
 fn cli() -> Command {
@@ -261,7 +261,7 @@ pub async fn setup_rocket_instance(
 
     let rocket = rocket.register("/", catchers![default_catcher]);
     let rocket = rocket.manage(app_config);
-    let rocket = services::register_services(rocket, db_pool, Box::new(file_driver));
+    let rocket = services::register_services(rocket, db_pool, Arc::new(file_driver));
     let rocket = routes::register_routes(rocket);
 
     Ok(rocket)

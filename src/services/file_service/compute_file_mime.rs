@@ -1,6 +1,4 @@
-use either::Either;
-use rocket::fs::TempFile;
-use std::io::Error as IOError;
+use std::{io::Error as IOError, path::PathBuf};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,33 +10,22 @@ pub enum ComputeFileMimeError {
 }
 
 pub async fn compute_file_mime(
-    file: &TempFile<'_>,
+    path: impl Into<PathBuf>,
 ) -> Result<Option<&'static str>, ComputeFileMimeError> {
-    match file {
-        TempFile::File { path, .. } => {
-            let path = match path {
-                Either::Left(path) => path.to_path_buf(),
-                Either::Right(path) => path.to_owned(),
-            };
+    let path = path.into();
 
-            tokio::task::spawn_blocking(move || {
-                let mime = infer::get_from_path(&path)
-                    .map_err(|err| ComputeFileMimeError::InferError(err))?;
+    tokio::task::spawn_blocking(move || {
+        let mime =
+            infer::get_from_path(&path).map_err(|err| ComputeFileMimeError::InferError(err))?;
 
-                match mime {
-                    Some(mime) => return Ok(Some(mime.mime_type())),
-                    None => Ok(Some(
-                        mime_guess::from_path(&path)
-                            .first_raw()
-                            .unwrap_or_else(|| "application/octet-stream"),
-                    )),
-                }
-            })
-            .await?
+        match mime {
+            Some(mime) => return Ok(Some(mime.mime_type())),
+            None => Ok(Some(
+                mime_guess::from_path(&path)
+                    .first_raw()
+                    .unwrap_or_else(|| "application/octet-stream"),
+            )),
         }
-        TempFile::Buffered { content } => match infer::get(&content) {
-            Some(mime) => Ok(Some(mime.mime_type())),
-            None => Ok(None),
-        },
-    }
+    })
+    .await?
 }

@@ -16,16 +16,17 @@ pub use user_service::*;
 
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use rocket::{Build, Rocket};
+use std::sync::Arc;
 
 pub fn register_services(
     rocket: Rocket<Build>,
     db_pool: Pool<AsyncPgConnection>,
-    file_driver: Box<impl 'static + FileDriver + Send + Sync>,
+    file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
 ) -> Rocket<Build> {
     let password_service = PasswordService::new();
     let auth_service = AuthService::new(db_pool.clone(), password_service.clone());
     let collection_service = CollectionService::new(db_pool.clone());
-    let staging_file_service = StagingFileService::new(db_pool.clone());
+    let staging_file_service = StagingFileService::new(db_pool.clone(), file_driver.clone());
     let file_service = FileService::new(db_pool.clone(), staging_file_service.clone(), file_driver);
     let user_service = UserService::new(db_pool, password_service.clone());
 

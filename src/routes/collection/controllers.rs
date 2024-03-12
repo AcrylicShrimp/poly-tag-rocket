@@ -34,7 +34,7 @@ enum Error {
     NotFoundError(StaticError),
     #[response(status = 500)]
     #[error("internal server error")]
-    CollectionServiceError(StaticError),
+    InternalServerError(StaticError),
 }
 
 impl Error {
@@ -45,7 +45,7 @@ impl Error {
 
 impl From<CollectionServiceError> for Error {
     fn from(_error: CollectionServiceError) -> Self {
-        Error::CollectionServiceError(StaticError::internal_server_error())
+        Error::InternalServerError(StaticError::internal_server_error())
     }
 }
 

@@ -1,14 +1,13 @@
 mod compute_file_hash;
 mod compute_file_mime;
 
-use super::{file_driver::FileDriver, StagingFileService, StagingFileServiceError};
+use super::{FileDriver, StagingFileService, StagingFileServiceError};
 use crate::db::models::{CreatingFile, File};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
     pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
     AsyncPgConnection, RunQueryDsl,
 };
-use rocket::fs::TempFile;
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
@@ -21,6 +20,8 @@ pub enum FileServiceError {
     DieselError(#[from] diesel::result::Error),
     #[error("staging file service error: {0}")]
     StagingFileServiceError(#[from] StagingFileServiceError),
+    #[error("file is not yet filled; upload it first")]
+    FileNotYetFilled,
     #[error("io error: {0}")]
     IOError(#[from] std::io::Error),
     #[error("compute file mime error: {0}")]
@@ -32,19 +33,19 @@ pub enum FileServiceError {
 pub struct FileService {
     db_pool: Pool<AsyncPgConnection>,
     staging_file_service: Arc<StagingFileService>,
-    file_driver: Box<dyn FileDriver + Send + Sync>,
+    file_driver: Arc<dyn FileDriver + Send + Sync>,
 }
 
 impl FileService {
     pub fn new(
         db_pool: Pool<AsyncPgConnection>,
         staging_file_service: Arc<StagingFileService>,
-        file_driver: Box<impl 'static + FileDriver + Send + Sync>,
+        file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
     ) -> Arc<Self> {
         Arc::new(Self {
             db_pool,
             staging_file_service,
-            file_driver: file_driver as Box<dyn FileDriver + Send + Sync>,
+            file_driver,
         })
     }
 
@@ -53,7 +54,6 @@ impl FileService {
     pub async fn create_file_from_staging_file_id(
         &self,
         staging_file_id: Uuid,
-        mut temp_file: TempFile<'_>,
     ) -> Result<Option<File>, FileServiceError> {
         use crate::db::schema;
 
@@ -67,25 +67,35 @@ impl FileService {
 
                 let staging_file = match staging_file {
                     Some(staging_file) => staging_file,
-                    None => return Ok(None),
+                    None => {
+                        return Ok(None);
+                    }
+                };
+
+                let file = self.file_driver.read_staging(staging_file.id).await?;
+                let file_path = match file {
+                    Some(file) => file,
+                    None => {
+                        return Err(FileServiceError::FileNotYetFilled);
+                    }
                 };
 
                 let compute_mime = || async {
                     match &staging_file.mime {
                         Some(mime) => Ok(Some(mime.as_str())),
-                        None => compute_file_mime::compute_file_mime(&temp_file)
+                        None => compute_file_mime::compute_file_mime(&file_path)
                             .await
                             .map_err(FileServiceError::from),
                     }
                 };
                 let compute_hash = || async {
-                    compute_file_hash::compute_file_hash(&temp_file)
+                    compute_file_hash::compute_file_hash(&file_path)
                         .await
                         .map_err(FileServiceError::from)
                 };
 
-                let size = temp_file.len();
-                let (mime, hash) = tokio::try_join!(compute_mime(), compute_hash(),)?;
+                let size = tokio::fs::metadata(&file_path).await?.len();
+                let (mime, hash) = tokio::try_join!(compute_mime(), compute_hash())?;
                 let mime = mime.unwrap_or("application/octet-stream");
 
                 let file = diesel::insert_into(schema::files::table)
@@ -106,7 +116,7 @@ impl FileService {
                     .get_result::<File>(db)
                     .await?;
 
-                self.file_driver.commit(file.id, &mut temp_file).await?;
+                self.file_driver.commit_staging(staging_file.id).await?;
 
                 Ok(Some(file))
             }

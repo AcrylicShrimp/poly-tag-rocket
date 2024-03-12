@@ -1,17 +1,22 @@
-use super::FileDriver;
-use rocket::{async_trait, fs::TempFile, tokio::fs::File};
+use super::{FileDriver, WriteError};
+use rocket::{async_trait, data::DataStream, tokio::fs::File};
 use std::{fs::Metadata, path::PathBuf};
+use tokio::{
+    fs::OpenOptions,
+    io::{AsyncRead, AsyncSeekExt, AsyncWriteExt, SeekFrom},
+};
 use uuid::Uuid;
 
 pub struct LocalFileSystem {
-    base_path: PathBuf,
+    staging_path: PathBuf,
+    resident_path: PathBuf,
     should_copy_files: bool,
 }
 
 impl LocalFileSystem {
     pub async fn new(
-        base_path: impl Into<PathBuf>,
-        temp_path: impl Into<PathBuf>,
+        staging_path: impl Into<PathBuf>,
+        resident_path: impl Into<PathBuf>,
     ) -> Result<Self, std::io::Error> {
         fn get_device_id(meta: &Metadata) -> Option<u64> {
             #[cfg(unix)]
@@ -30,66 +35,158 @@ impl LocalFileSystem {
             }
         }
 
-        let base_path = base_path.into();
-        let temp_path = temp_path.into();
+        let staging_path = staging_path.into();
+        let resident_path = resident_path.into();
 
-        if !tokio::fs::try_exists(&base_path).await? {
-            tokio::fs::create_dir_all(&base_path).await?;
+        if !tokio::fs::try_exists(&staging_path).await? {
+            tokio::fs::create_dir_all(&staging_path).await?;
         }
 
-        if !tokio::fs::try_exists(&temp_path).await? {
-            tokio::fs::create_dir_all(&temp_path).await?;
+        if !tokio::fs::try_exists(&resident_path).await? {
+            tokio::fs::create_dir_all(&resident_path).await?;
         }
 
-        let base_path_meta = tokio::fs::metadata(&base_path).await?;
-        let temp_path_meta = tokio::fs::metadata(&temp_path).await?;
+        let staging_path_meta = tokio::fs::metadata(&staging_path).await?;
+        let resident_path_meta = tokio::fs::metadata(&resident_path).await?;
 
-        let base_path_device_id = get_device_id(&base_path_meta);
-        let temp_path_device_id = get_device_id(&temp_path_meta);
+        let staging_path_device_id = get_device_id(&staging_path_meta);
+        let resident_path_device_id = get_device_id(&resident_path_meta);
 
-        let should_copy_files = match (base_path_device_id, temp_path_device_id) {
-            (Some(base_path_device_id), Some(temp_path_device_id)) => {
-                base_path_device_id != temp_path_device_id
+        let should_copy_files = match (staging_path_device_id, resident_path_device_id) {
+            (Some(staging_path_device_id), Some(resident_path_device_id)) => {
+                staging_path_device_id != resident_path_device_id
             }
             _ => true,
         };
 
         Ok(Self {
-            base_path,
+            staging_path,
+            resident_path,
             should_copy_files,
         })
     }
 
-    fn generate_local_file_path(&self, id: Uuid) -> PathBuf {
-        self.base_path.join(id.to_string())
+    fn generate_staging_file_path(&self, id: Uuid) -> PathBuf {
+        self.staging_path.join(id.to_string())
+    }
+
+    fn generate_resident_file_path(&self, id: Uuid) -> PathBuf {
+        self.resident_path.join(id.to_string())
     }
 }
 
 #[async_trait]
 impl FileDriver for LocalFileSystem {
-    async fn commit(&self, id: Uuid, file: &mut TempFile) -> Result<(), std::io::Error> {
-        let local_file_path = self.generate_local_file_path(id);
+    async fn write_staging(
+        &self,
+        id: Uuid,
+        offset: u64,
+        mut stream: DataStream<'_>,
+    ) -> Result<i64, WriteError> {
+        fn make_write_error(io_error: std::io::Error, file_size: u64) -> WriteError {
+            WriteError::WriteError {
+                io_error,
+                file_size,
+            }
+        }
+
+        let path = self.generate_staging_file_path(id);
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .open(&path)
+            .await
+            .map_err(|err| make_write_error(err, 0))?;
+        let initial_file_size = file
+            .metadata()
+            .await
+            .map(|meta| meta.len())
+            .map_err(|err| make_write_error(err, 0))?;
+
+        if (i64::MAX as u64) < initial_file_size {
+            return Err(WriteError::FileTooLarge {
+                max_size: i64::MAX as u64,
+                file_size: initial_file_size,
+            });
+        }
+
+        if initial_file_size < offset as u64 {
+            return Err(WriteError::OffsetExceedsFileSize {
+                offset,
+                file_size: initial_file_size,
+            });
+        }
+
+        if (i64::MAX as u128) < offset as u128 + initial_file_size as u128 {
+            return Err(WriteError::OffsetTooLarge {
+                max_offset: i64::MAX as u64,
+                offset,
+            });
+        }
+
+        file.seek(SeekFrom::Start(offset))
+            .await
+            .map_err(|err| make_write_error(err, initial_file_size))?;
+
+        let copy_result = tokio::io::copy(&mut stream, &mut file).await;
+        file.flush().await.ok();
+
+        let file_size = file
+            .metadata()
+            .await
+            .map(|meta| meta.len())
+            .ok()
+            .unwrap_or_else(|| initial_file_size);
+
+        match copy_result {
+            Ok(_) => Ok(file_size as i64),
+            Err(err) => Err(make_write_error(err, file_size)),
+        }
+    }
+
+    async fn remove_staging(&self, id: Uuid) -> Result<(), std::io::Error> {
+        let path = self.generate_staging_file_path(id);
+        tokio::fs::remove_file(&path).await?;
+
+        Ok(())
+    }
+
+    async fn read_staging(&self, id: Uuid) -> Result<Option<PathBuf>, std::io::Error> {
+        let path = self.generate_staging_file_path(id);
+
+        match File::open(&path).await {
+            Ok(_) => Ok(Some(path)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn commit_staging(&self, id: Uuid) -> Result<(), std::io::Error> {
+        let staging_path = self.generate_staging_file_path(id);
+        let resident_path = self.generate_resident_file_path(id);
 
         if self.should_copy_files {
-            file.move_copy_to(&local_file_path).await?;
+            tokio::fs::copy(&staging_path, &resident_path).await?;
+            tokio::fs::remove_file(&staging_path).await?;
         } else {
-            file.persist_to(&local_file_path).await?;
+            tokio::fs::rename(&staging_path, &resident_path).await?;
         }
 
         Ok(())
     }
 
     async fn remove(&self, id: Uuid) -> Result<(), std::io::Error> {
-        let local_file_path = self.generate_local_file_path(id);
-        tokio::fs::remove_file(&local_file_path).await?;
+        let path = self.generate_resident_file_path(id);
+        tokio::fs::remove_file(&path).await?;
+
         Ok(())
     }
 
-    async fn read(&self, id: Uuid) -> Result<Option<File>, std::io::Error> {
-        let local_file_path = self.generate_local_file_path(id);
+    async fn read(&self, id: Uuid) -> Result<Option<Box<dyn AsyncRead>>, std::io::Error> {
+        let path = self.generate_resident_file_path(id);
 
-        match File::open(&local_file_path).await {
-            Ok(file) => Ok(Some(file)),
+        match File::open(&path).await {
+            Ok(file) => Ok(Some(Box::new(file))),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(err),
         }

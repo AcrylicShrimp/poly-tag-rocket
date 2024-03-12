@@ -29,7 +29,7 @@ enum Error {
     NotFoundError(StaticError),
     #[response(status = 500)]
     #[error("internal server error")]
-    AuthServiceError(StaticError),
+    InternalServerError(StaticError),
 }
 
 impl Error {
@@ -44,7 +44,7 @@ impl Error {
 
 impl From<AuthServiceError> for Error {
     fn from(_error: AuthServiceError) -> Self {
-        Error::AuthServiceError(StaticError::internal_server_error())
+        Error::InternalServerError(StaticError::internal_server_error())
     }
 }
 

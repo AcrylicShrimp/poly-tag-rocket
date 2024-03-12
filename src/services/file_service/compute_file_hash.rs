@@ -1,5 +1,5 @@
-use rocket::fs::TempFile;
 use std::{
+    path::Path,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -16,26 +16,17 @@ pub enum ComputeFileHashError {
     ReadFileError(IOError),
 }
 
-pub async fn compute_file_hash(file: &TempFile<'_>) -> Result<u32, ComputeFileHashError> {
+pub async fn compute_file_hash(path: impl AsRef<Path>) -> Result<u32, ComputeFileHashError> {
     let mut hasher = AsyncCrc32Hasher::new();
 
-    match file {
-        TempFile::File { path, .. } => {
-            let mut file = tokio::fs::File::open(path)
-                .await
-                .map_err(ComputeFileHashError::OpenFileError)?;
-            let mut reader = tokio::io::BufReader::with_capacity(BUFFER_SIZE, &mut file);
-            tokio::io::copy(&mut reader, &mut hasher)
-                .await
-                .map_err(ComputeFileHashError::ReadFileError)?;
-        }
-        TempFile::Buffered { content } => {
-            let mut reader = std::io::Cursor::new(content);
-            tokio::io::copy(&mut reader, &mut hasher)
-                .await
-                .map_err(ComputeFileHashError::ReadFileError)?;
-        }
-    }
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(ComputeFileHashError::OpenFileError)?;
+    let mut reader = tokio::io::BufReader::with_capacity(BUFFER_SIZE, &mut file);
+
+    tokio::io::copy(&mut reader, &mut hasher)
+        .await
+        .map_err(ComputeFileHashError::ReadFileError)?;
 
     Ok(hasher.into_inner().finalize())
 }
