@@ -32,6 +32,7 @@ diesel::table! {
         id -> Uuid,
         name -> Text,
         mime -> Nullable<Text>,
+        size -> Int8,
         staged_at -> Timestamp,
     }
 }

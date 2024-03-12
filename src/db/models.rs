@@ -112,6 +112,7 @@ pub struct StagingFile {
     pub id: Uuid,
     pub name: String,
     pub mime: Option<String>,
+    pub size: i64,
     pub staged_at: NaiveDateTime,
 }
 
@@ -121,4 +122,5 @@ pub struct StagingFile {
 pub struct CreatingStagingFile<'a> {
     pub name: &'a str,
     pub mime: Option<&'a str>,
+    pub size: i64,
 }
