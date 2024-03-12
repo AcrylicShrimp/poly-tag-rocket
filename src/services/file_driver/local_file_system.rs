@@ -71,7 +71,7 @@ impl FileDriver for LocalFileSystem {
         let local_file_path = self.generate_local_file_path(id);
 
         if self.should_copy_files {
-            file.copy_to(&local_file_path).await?;
+            file.move_copy_to(&local_file_path).await?;
         } else {
             file.persist_to(&local_file_path).await?;
         }
