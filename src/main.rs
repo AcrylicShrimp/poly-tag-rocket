@@ -172,14 +172,15 @@ fn test_config(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(), AppE
     let app_config = AppConfig::load(config_path.clone())?;
     let rocket_config = app_config.make_rocket_config();
 
-    println!("Configuration has been loaded successfully.");
-
     if let Some(config_path) = &config_path {
         let config_path = config_path.as_ref().canonicalize()?;
-        println!("Base configuration path: `{}`", config_path.display());
+        println!(
+            "Configuration path has been set: `{}`",
+            config_path.display()
+        );
     }
 
-    println!("Configuration may be overridden by environment variables.");
+    println!("Configuration has been loaded successfully.");
 
     println!("[Loaded Configuration]");
     println!("- address: {}", rocket_config.address);
@@ -217,14 +218,13 @@ async fn run_server(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(),
     let app_config = AppConfig::load(config_path.clone())?;
     let rocket = create_rocket_instance(&app_config)?;
 
-    log::info!("Configuration has been loaded.");
-
     if let Some(config_path) = &config_path {
         let config_path = config_path.as_ref().canonicalize()?;
-        log::info!("Base configuration path: `{}`", config_path.display());
+        let config_path = config_path.display().to_string();
+        log::info!(target: "init", config_path; "Configuration path has been set.");
     }
 
-    log::info!("Configuration may be overridden by environment variables.");
+    log::info!(target: "init", app_config:serde; "Configuration has been loaded.");
 
     let rocket = setup_rocket_instance(app_config, rocket).await?;
     let _rocket = rocket.launch().await?;
@@ -246,18 +246,27 @@ pub async fn setup_rocket_instance(
     app_config: AppConfig,
     rocket: Rocket<Build>,
 ) -> Result<Rocket<Build>, AppError> {
-    log::info!("Running database migrations.");
-    db::run_migrations(&app_config.database_url_base, &app_config.database_name)?;
+    let database_url_base = &app_config.database_url_base;
+    let database_name = &app_config.database_name;
 
-    log::info!("Creating database connection pool.");
-    let db_pool = db::create_database_connection_pool(
-        &app_config.database_url_base,
-        &app_config.database_name,
-    )
-    .expect("Failed to connect to database.");
+    log::info!(target: "db", database_url_base, database_name; "Running database migrations.");
+    db::run_migrations(database_url_base, database_name)?;
 
-    let file_driver =
-        LocalFileSystem::new(&app_config.file_base_path, &app_config.temp_base_path).await?;
+    log::info!(target: "db", database_url_base, database_name; "Creating database connection pool.");
+    let db_pool = db::create_database_connection_pool(database_url_base, database_name);
+    let db_pool = match db_pool {
+        Ok(db_pool) => db_pool,
+        Err(err) => {
+            log::error!(target: "db", database_url_base, database_name, err:err; "Failed to create database connection pool.");
+            return Err(err.into());
+        }
+    };
+
+    let temp_base_path = &app_config.temp_base_path;
+    let file_base_path = &app_config.file_base_path;
+
+    log::info!(target: "file_driver", temp_base_path:?, file_base_path:?; "Creating file driver.");
+    let file_driver = LocalFileSystem::new(temp_base_path, file_base_path).await?;
 
     let rocket = rocket.register("/", catchers![default_catcher]);
     let rocket = rocket.manage(app_config);

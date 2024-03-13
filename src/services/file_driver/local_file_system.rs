@@ -38,16 +38,55 @@ impl LocalFileSystem {
         let staging_path = staging_path.into();
         let resident_path = resident_path.into();
 
-        if !tokio::fs::try_exists(&staging_path).await? {
-            tokio::fs::create_dir_all(&staging_path).await?;
+        let staging_path_exists = tokio::fs::try_exists(&staging_path).await;
+        let staging_path_exists = match staging_path_exists {
+            Ok(exists) => exists,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to check if staging path exists.");
+                return Err(err);
+            }
+        };
+
+        let resident_path_exists = tokio::fs::try_exists(&resident_path).await;
+        let resident_path_exists = match resident_path_exists {
+            Ok(exists) => exists,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to check if resident path exists.");
+                return Err(err);
+            }
+        };
+
+        if !staging_path_exists {
+            if let Err(err) = tokio::fs::create_dir_all(&staging_path).await {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to create staging path.");
+                return Err(err);
+            }
         }
 
-        if !tokio::fs::try_exists(&resident_path).await? {
-            tokio::fs::create_dir_all(&resident_path).await?;
+        if !resident_path_exists {
+            if let Err(err) = tokio::fs::create_dir_all(&resident_path).await {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to create resident path.");
+                return Err(err);
+            }
         }
 
-        let staging_path_meta = tokio::fs::metadata(&staging_path).await?;
-        let resident_path_meta = tokio::fs::metadata(&resident_path).await?;
+        let staging_path_meta = tokio::fs::metadata(&staging_path).await;
+        let staging_path_meta = match staging_path_meta {
+            Ok(meta) => meta,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to get metadata of staging path.");
+                return Err(err);
+            }
+        };
+
+        let resident_path_meta = tokio::fs::metadata(&resident_path).await;
+        let resident_path_meta = match resident_path_meta {
+            Ok(meta) => meta,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to get metadata of resident path.");
+                return Err(err);
+            }
+        };
 
         let staging_path_device_id = get_device_id(&staging_path_meta);
         let resident_path_device_id = get_device_id(&resident_path_meta);
@@ -91,17 +130,28 @@ impl FileDriver for LocalFileSystem {
         }
 
         let path = self.generate_staging_file_path(id);
-        let mut file = OpenOptions::new()
+
+        let file = OpenOptions::new()
             .write(true)
             .create(true)
             .open(&path)
-            .await
-            .map_err(|err| make_write_error(err, 0))?;
-        let initial_file_size = file
-            .metadata()
-            .await
-            .map(|meta| meta.len())
-            .map_err(|err| make_write_error(err, 0))?;
+            .await;
+        let mut file = match file {
+            Ok(file) => file,
+            Err(err) => {
+                log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to open file.");
+                return Err(make_write_error(err, 0));
+            }
+        };
+
+        let initial_file_size = file.metadata().await.map(|meta| meta.len());
+        let initial_file_size = match initial_file_size {
+            Ok(size) => size,
+            Err(err) => {
+                log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to get file size.");
+                return Err(make_write_error(err, 0));
+            }
+        };
 
         if (i64::MAX as u64) < initial_file_size {
             return Err(WriteError::FileTooLarge {
@@ -124,29 +174,48 @@ impl FileDriver for LocalFileSystem {
             });
         }
 
-        file.seek(SeekFrom::Start(offset))
-            .await
-            .map_err(|err| make_write_error(err, initial_file_size))?;
+        if let Err(err) = file.seek(SeekFrom::Start(offset)).await {
+            log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to seek file.");
+            return Err(make_write_error(err, initial_file_size));
+        }
 
         let copy_result = tokio::io::copy(&mut stream, &mut file).await;
-        file.flush().await.ok();
+        let copy_err = match copy_result {
+            Ok(_) => None,
+            Err(err) => {
+                log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to write to file.");
+                Some(err)
+            }
+        };
 
-        let file_size = file
-            .metadata()
-            .await
-            .map(|meta| meta.len())
-            .ok()
-            .unwrap_or_else(|| initial_file_size);
+        if let Err(err) = file.flush().await {
+            log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to flush file.");
+            // here, we don't return the error, because we must carry on.
+        }
 
-        match copy_result {
-            Ok(_) => Ok(file_size as i64),
-            Err(err) => Err(make_write_error(err, file_size)),
+        let file_size = file.metadata().await.map(|meta| meta.len());
+        let file_size = match file_size {
+            Ok(size) => size,
+            Err(err) => {
+                log::error!(target: "file_driver", method="write_staging", id:serde, path:?, err:err; "Failed to get file size after write.");
+                // assume the write operation has been failed entirely, since we can't get the file size.
+                initial_file_size
+            }
+        };
+
+        match copy_err {
+            Some(err) => Err(make_write_error(err, file_size)),
+            None => Ok(file_size as i64),
         }
     }
 
     async fn remove_staging(&self, id: Uuid) -> Result<(), std::io::Error> {
         let path = self.generate_staging_file_path(id);
-        tokio::fs::remove_file(&path).await?;
+
+        if let Err(err) = tokio::fs::remove_file(&path).await {
+            log::error!(target: "file_driver", method="remove_staging", id:serde, path:?, err:err; "Failed to remove file.");
+            return Err(err);
+        }
 
         Ok(())
     }
@@ -157,7 +226,10 @@ impl FileDriver for LocalFileSystem {
         match File::open(&path).await {
             Ok(_) => Ok(Some(path)),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(err) => Err(err),
+            Err(err) => {
+                log::error!(target: "file_driver", method="read_staging", id:serde, path:?, err:err; "Failed to open file.");
+                Err(err)
+            }
         }
     }
 
@@ -166,10 +238,20 @@ impl FileDriver for LocalFileSystem {
         let resident_path = self.generate_resident_file_path(id);
 
         if self.should_copy_files {
-            tokio::fs::copy(&staging_path, &resident_path).await?;
-            tokio::fs::remove_file(&staging_path).await?;
+            if let Err(err) = tokio::fs::copy(&staging_path, &resident_path).await {
+                log::error!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to copy file.");
+                return Err(err);
+            }
+
+            if let Err(err) = tokio::fs::remove_file(&staging_path).await {
+                log::warn!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to remove file.");
+                // removing the staging file is not critical, so we don't return the error.
+            }
         } else {
-            tokio::fs::rename(&staging_path, &resident_path).await?;
+            if let Err(err) = tokio::fs::rename(&staging_path, &resident_path).await {
+                log::error!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to rename file.");
+                return Err(err);
+            }
         }
 
         Ok(())
@@ -177,7 +259,11 @@ impl FileDriver for LocalFileSystem {
 
     async fn remove(&self, id: Uuid) -> Result<(), std::io::Error> {
         let path = self.generate_resident_file_path(id);
-        tokio::fs::remove_file(&path).await?;
+
+        if let Err(err) = tokio::fs::remove_file(&path).await {
+            log::error!(target: "file_driver", method="remove", id:serde, path:?, err:err; "Failed to remove file.");
+            return Err(err);
+        }
 
         Ok(())
     }
@@ -191,7 +277,10 @@ impl FileDriver for LocalFileSystem {
         match File::open(&path).await {
             Ok(file) => Ok(Some(Box::pin(BufReader::new(file)))),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(err) => Err(err),
+            Err(err) => {
+                log::error!(target: "file_driver", method="read", id:serde, path:?, err:err; "Failed to open file.");
+                Err(err)
+            }
         }
     }
 }

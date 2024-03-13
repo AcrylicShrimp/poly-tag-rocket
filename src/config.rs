@@ -7,13 +7,13 @@ use rocket::{
     data::{ByteUnit, Limits},
     Config,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     net::IpAddr,
     path::{Path, PathBuf},
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AppLimit {
     pub form: ByteUnit,
     pub data_form: ByteUnit,
@@ -38,7 +38,7 @@ impl Default for AppLimit {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AppConfig {
     /// The address to bind the server to.
     #[serde(default = "defaults::address")]

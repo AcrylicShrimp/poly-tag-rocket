@@ -20,7 +20,7 @@ diesel_migrations = { version = "2", features = ["postgres"] }
 either = { version = "1" }
 figment = { version = "0.10", features = ["toml", "yaml", "json"] }
 infer = { version = "0.15" }
-log = { version = "0.4" }
+log = { version = "0.4", features = ["kv_std", "kv_serde"] }
 mime_guess = { version = "2" }
 rocket = { version = "0.5", features = ["json", "uuid"] }
 serde = { version = "1", features = ["derive"] }
