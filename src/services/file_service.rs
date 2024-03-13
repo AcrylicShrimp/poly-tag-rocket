@@ -8,8 +8,9 @@ use diesel_async::{
     pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
     AsyncPgConnection, RunQueryDsl,
 };
-use std::sync::Arc;
+use std::{pin::Pin, sync::Arc};
 use thiserror::Error;
+use tokio::io::AsyncRead;
 use uuid::Uuid;
 
 #[derive(Error, Debug)]
@@ -62,7 +63,7 @@ impl FileService {
             async move {
                 let staging_file = self
                     .staging_file_service
-                    .remove_staging_file_by_id(staging_file_id, Some(db))
+                    .remove_staging_file_by_id(staging_file_id, Some(db), false)
                     .await?;
 
                 let staging_file = match staging_file {
@@ -123,5 +124,67 @@ impl FileService {
             .scope_boxed()
         })
         .await
+    }
+
+    /// Removes a file by its ID.
+    /// Returns the file that was removed, or `None` if no file was found.
+    /// It also removes the file from the file driver.
+    pub async fn remove_file_by_id(&self, file_id: Uuid) -> Result<Option<File>, FileServiceError> {
+        use crate::db::schema;
+
+        let db = &mut self.db_pool.get().await?;
+        let file = diesel::delete(
+            crate::db::schema::files::table.filter(crate::db::schema::files::id.eq(file_id)),
+        )
+        .returning((
+            schema::files::id,
+            schema::files::name,
+            schema::files::mime,
+            schema::files::size,
+            schema::files::hash,
+            schema::files::uploaded_at,
+        ))
+        .get_result::<File>(db)
+        .await
+        .optional()?;
+
+        if file.is_some() {
+            // it is safe to ignore the result of this operation
+            self.file_driver.remove(file_id).await.ok();
+        }
+
+        Ok(file)
+    }
+
+    /// Retrieves a file by its ID.
+    pub async fn get_file_by_id(&self, file_id: Uuid) -> Result<Option<File>, FileServiceError> {
+        use crate::db::schema;
+
+        let db = &mut self.db_pool.get().await?;
+        let file = schema::files::table
+            .filter(schema::files::id.eq(file_id))
+            .select((
+                schema::files::id,
+                schema::files::name,
+                schema::files::mime,
+                schema::files::size,
+                schema::files::hash,
+                schema::files::uploaded_at,
+            ))
+            .get_result::<File>(db)
+            .await
+            .optional()?;
+
+        Ok(file)
+    }
+
+    /// Retrieves the file data by its ID.
+    pub async fn get_file_data_by_id(
+        &self,
+        file_id: Uuid,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, FileServiceError> {
+        let data = self.file_driver.read(file_id).await?;
+
+        Ok(data)
     }
 }

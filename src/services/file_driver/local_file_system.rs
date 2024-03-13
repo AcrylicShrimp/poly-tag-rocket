@@ -1,9 +1,9 @@
 use super::{FileDriver, WriteError};
 use rocket::{async_trait, data::DataStream, tokio::fs::File};
-use std::{fs::Metadata, path::PathBuf};
+use std::{fs::Metadata, path::PathBuf, pin::Pin};
 use tokio::{
     fs::OpenOptions,
-    io::{AsyncRead, AsyncSeekExt, AsyncWriteExt, SeekFrom},
+    io::{AsyncRead, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
 };
 use uuid::Uuid;
 
@@ -182,11 +182,14 @@ impl FileDriver for LocalFileSystem {
         Ok(())
     }
 
-    async fn read(&self, id: Uuid) -> Result<Option<Box<dyn AsyncRead>>, std::io::Error> {
+    async fn read(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, std::io::Error> {
         let path = self.generate_resident_file_path(id);
 
         match File::open(&path).await {
-            Ok(file) => Ok(Some(Box::new(file))),
+            Ok(file) => Ok(Some(Box::pin(BufReader::new(file)))),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(err) => Err(err),
         }

@@ -7,7 +7,8 @@ use crate::{
     services::{StagingFileService, StagingFileServiceError, WriteError},
 };
 use rocket::{
-    http::Status, post, put, routes, serde::json::Json, Build, Data, Responder, Rocket, State,
+    delete, get, http::Status, post, put, routes, serde::json::Json, Build, Data, Responder,
+    Rocket, State,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -15,7 +16,12 @@ use uuid::Uuid;
 pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket.mount(
         "/staging-files",
-        routes![create_staging_file, fill_staging_file],
+        routes![
+            create_staging_file,
+            remove_staging_file,
+            get_staging_file,
+            fill_staging_file
+        ],
     )
 }
 
@@ -60,6 +66,44 @@ async fn create_staging_file(
         .await?;
 
     Ok((Status::Created, Json(staging_file)))
+}
+
+#[delete("/<staging_file_id>")]
+async fn remove_staging_file(
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    staging_file_service: &State<Arc<StagingFileService>>,
+    staging_file_id: Uuid,
+) -> Result<(Status, Json<StagingFile>), Error> {
+    let staging_file = staging_file_service
+        .remove_staging_file_by_id(staging_file_id, None, true)
+        .await?;
+    let staging_file = match staging_file {
+        Some(staging_file) => staging_file,
+        None => {
+            return Err(Error::not_found_error());
+        }
+    };
+
+    Ok((Status::Ok, Json(staging_file)))
+}
+
+#[get("/<staging_file_id>")]
+async fn get_staging_file(
+    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    staging_file_service: &State<Arc<StagingFileService>>,
+    staging_file_id: Uuid,
+) -> Result<(Status, Json<StagingFile>), Error> {
+    let staging_file = staging_file_service
+        .get_staging_file_by_id(staging_file_id)
+        .await?;
+    let staging_file = match staging_file {
+        Some(staging_file) => staging_file,
+        None => {
+            return Err(Error::not_found_error());
+        }
+    };
+
+    Ok((Status::Ok, Json(staging_file)))
 }
 
 #[put("/<staging_file_id>", data = "<data>")]
@@ -115,7 +159,9 @@ async fn fill_staging_file(
     };
     let staging_file = match staging_file {
         Some(staging_file) => staging_file,
-        None => return Err(Error::not_found_error()),
+        None => {
+            return Err(Error::not_found_error());
+        }
     };
 
     Ok((Status::Ok, Json(staging_file)))

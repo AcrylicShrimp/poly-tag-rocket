@@ -2,7 +2,7 @@ pub mod local_file_system;
 
 use async_trait::async_trait;
 use rocket::data::DataStream;
-use std::path::PathBuf;
+use std::{path::PathBuf, pin::Pin};
 use thiserror::Error;
 use tokio::io::AsyncRead;
 use uuid::Uuid;
@@ -66,5 +66,8 @@ pub trait FileDriver {
 
     /// Reads a file from the storage system.
     /// Returns the file if it exists, otherwise `None`.
-    async fn read(&self, id: Uuid) -> Result<Option<Box<dyn AsyncRead>>, std::io::Error>;
+    async fn read(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, std::io::Error>;
 }

@@ -26,6 +26,7 @@ rocket = { version = "0.5", features = ["json", "uuid"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 thiserror = { version = "1" }
-tokio = { version = "1", features = ["fs"] }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io", "futures-io", "futures-util"] }
 utoipa = { version = "4", features = ["rocket_extras", "uuid", "chrono"] }
 uuid = { version = "1", features = ["v4", "serde"] }
