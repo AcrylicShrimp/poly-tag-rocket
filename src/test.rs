@@ -36,9 +36,14 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
 }
 
 pub mod helpers {
+    use rocket::{
+        http::{Accept, ContentType, Header},
+        local::asynchronous::Client,
+    };
+
     use crate::{
-        db::models::{User, UserSession},
-        services::{AuthService, UserService},
+        db::models::{StagingFile, User, UserSession},
+        services::{AuthService, StagingFileService, UserService},
     };
 
     pub async fn create_user(id: &str, user_service: &UserService) -> User {
@@ -60,5 +65,40 @@ pub mod helpers {
         let user = create_user("initial", user_service).await;
         let user_session = auth_service.create_user_session(user.id).await.unwrap();
         (user, user_session)
+    }
+
+    pub async fn create_filled_staging_file(
+        client: &Client,
+        staging_file_service: &StagingFileService,
+        user_session: &UserSession,
+        name: impl AsRef<str>,
+        mime: Option<impl AsRef<str>>,
+        file_content: impl AsRef<[u8]>,
+    ) -> StagingFile {
+        let name = name.as_ref();
+        let mime = mime.as_ref().map(|mime| mime.as_ref());
+
+        let staging_file = staging_file_service
+            .create_staging_file(name, mime)
+            .await
+            .unwrap();
+
+        let file_content = file_content.as_ref();
+
+        let response = client
+            .put(format!("/staging-files/{}", staging_file.id))
+            .header(Accept::JSON)
+            .header(ContentType::Binary)
+            .header(Header::new(
+                "Authorization",
+                format!("Bearer {}", user_session.token),
+            ))
+            .body(file_content)
+            .dispatch()
+            .await;
+
+        let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+        filled_staging_file
     }
 }
