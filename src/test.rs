@@ -23,9 +23,7 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     app_config.database_name = database_name.clone();
 
     let rocket = create_rocket_instance(&app_config).unwrap();
-    let rocket = setup_rocket_instance(app_config, rocket, false)
-        .await
-        .unwrap();
+    let rocket = setup_rocket_instance(app_config, rocket).await.unwrap();
     let database_dropper = DatabaseDropper::new(
         &database_url_base,
         &maintenance_database_name,

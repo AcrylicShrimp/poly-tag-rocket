@@ -26,6 +26,7 @@ log = { version = "0.4", features = [
     "kv_serde",
     "release_max_level_info",
 ] }
+meilisearch-sdk = { version = "0.25" }
 mime_guess = { version = "2" }
 parking_lot = { version = "0.12", features = [
     "hardware-lock-elision",

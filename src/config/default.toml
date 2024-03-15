@@ -19,6 +19,16 @@ database_url_base = "postgres://user:password@localhost:5432"
 # The database must be exist and be empty.
 database_name = "file_server"
 
+# The URL for the MeiliSearch server.
+meilisearch_url = "http://localhost:7700"
+
+# The master key for the MeiliSearch server.
+meilisearch_master_key = "master_key"
+
+# The prefix for the MeiliSearch index. It will be lowercased.
+# All indices created by the application will have this prefix.
+meilisearch_index_prefix = "file_server"
+
 # The limits for the application.
 [limits]
 form = "32KiB"

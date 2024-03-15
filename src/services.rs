@@ -3,6 +3,7 @@ mod collection_service;
 mod file_driver;
 mod file_service;
 mod password_service;
+mod search_service;
 mod staging_file_service;
 mod user_service;
 
@@ -11,6 +12,7 @@ pub use collection_service::*;
 pub use file_driver::*;
 pub use file_service::*;
 pub use password_service::*;
+pub use search_service::*;
 pub use staging_file_service::*;
 pub use user_service::*;
 
@@ -29,6 +31,8 @@ pub fn register_services(
     let staging_file_service = StagingFileService::new(db_pool.clone(), file_driver.clone());
     let file_service = FileService::new(db_pool.clone(), staging_file_service.clone(), file_driver);
     let user_service = UserService::new(db_pool, password_service.clone());
+
+    // search_service is not included; it should be added manually.
 
     rocket
         .manage(password_service)

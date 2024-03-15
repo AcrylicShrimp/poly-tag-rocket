@@ -104,6 +104,15 @@ pub struct AppConfig {
     #[cfg(test)]
     #[serde(default = "app_config_defaults::maintenance_database_name")]
     pub maintenance_database_name: String,
+    /// The URL for the MeiliSearch server.
+    pub meilisearch_url: String,
+    /// The master key for the MeiliSearch server.
+    #[serde(default)]
+    pub meilisearch_master_key: Option<String>,
+    /// The prefix for the MeiliSearch index. It will be lowercased.
+    /// All indices created by the application will have this prefix.
+    #[serde(default)]
+    pub meilisearch_index_prefix: Option<String>,
     /// The limits for the application.
     #[serde(default)]
     pub limits: AppLimit,

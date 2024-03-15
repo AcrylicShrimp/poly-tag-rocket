@@ -5,6 +5,9 @@
   "temp_base_path": "temp",
   "database_url_base": "postgres://user:password@localhost:5432",
   "database_name": "file_server",
+  "meilisearch_url": "http://localhost:7700",
+  "meilisearch_master_key": "master_key",
+  "meilisearch_index_prefix": "file_server",
   "limits": {
     "form": "32KiB",
     "data_form": "2MiB",
