@@ -12,8 +12,10 @@ mod test;
 
 use crate::{
     config::AppConfig,
-    services::{local_file_system::LocalFileSystem, SearchService},
+    fairings::staging_file_remover::StagingFileRemover,
+    services::{local_file_system::LocalFileSystem, SearchService, StagingFileService},
 };
+use chrono::Duration;
 use clap::{Arg, ArgAction, Command, ValueHint};
 use const_format::formatcp;
 use dto::Error;
@@ -304,23 +306,13 @@ pub async fn setup_rocket_instance(
         services::register_services(rocket, db_pool, search_service, Arc::new(file_driver));
     let rocket = routes::register_routes(rocket);
 
-    #[cfg(not(test))]
-    let rocket = {
-        use chrono::Duration;
-        use fairings::staging_file_remover::StagingFileRemover;
-        use services::StagingFileService;
+    let staging_file_remover = StagingFileRemover::new(
+        Duration::new(app_config.expired_staging_file_removal_period as i64, 0).unwrap(),
+        Duration::new(app_config.expired_staging_file_expiration as i64, 0).unwrap(),
+        rocket.state::<Arc<StagingFileService>>().unwrap().clone(),
+    );
 
-        let staging_file_remover = StagingFileRemover::new(
-            Duration::new(app_config.expired_staging_file_removal_period as i64, 0).unwrap(),
-            Duration::new(app_config.expired_staging_file_expiration as i64, 0).unwrap(),
-            rocket.state::<Arc<StagingFileService>>().unwrap().clone(),
-        );
-
-        let rocket = rocket.attach(staging_file_remover);
-
-        rocket
-    };
-
+    let rocket = rocket.attach(staging_file_remover);
     let rocket = rocket.manage(app_config);
 
     Ok(rocket)
