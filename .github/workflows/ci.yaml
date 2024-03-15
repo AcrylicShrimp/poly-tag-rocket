@@ -1,0 +1,65 @@
+
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: polytag
+
+      RUST_CHANNEL: nightly
+
+      # for application
+      FILE_BASE_PATH: temp/files
+      TEMP_BASE_PATH: temp/temp
+
+      DATABASE_URL_BASE: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432
+      DATABASE_NAME: ${POSTGRES_DB}
+      MAINTENANCE_DATABASE_NAME: postgres
+
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
+
+    services:
+      postgres:
+        image: postgres
+
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: polytag
+
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      run: |
+        rustup update --no-self-update ${{ env.RUST_CHANNEL }}
+
+    - name: Compile (tests)
+      run: cargo test --no-run
+
+    - name: Test
+      run: cargo test
