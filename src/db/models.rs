@@ -98,6 +98,7 @@ pub struct File {
 #[diesel(table_name = crate::db::schema::files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct CreatingFile<'a> {
+    pub id: Uuid,
     pub name: &'a str,
     pub mime: &'a str,
     pub size: i64,

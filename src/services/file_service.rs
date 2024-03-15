@@ -101,6 +101,7 @@ impl FileService {
 
                 let file = diesel::insert_into(schema::files::table)
                     .values(CreatingFile {
+                        id: staging_file.id,
                         name: &staging_file.name,
                         mime,
                         size: size as i64,
