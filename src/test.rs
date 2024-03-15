@@ -21,7 +21,7 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper, I
     let database_name =
         db::test::create_test_database(&database_url_base, &maintenance_database_name, &id)
             .unwrap();
-    let index_prefix = format!("__test_{}_", id);
+    let index_prefix = format!("__test_{}", id);
 
     app_config.database_name = database_name.clone();
     app_config.meilisearch_index_prefix = Some(index_prefix.clone());
