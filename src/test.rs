@@ -34,3 +34,31 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
 
     (rocket, database_dropper)
 }
+
+pub mod helpers {
+    use crate::{
+        db::models::{User, UserSession},
+        services::{AuthService, UserService},
+    };
+
+    pub async fn create_user(id: &str, user_service: &UserService) -> User {
+        let user = user_service
+            .create_user(
+                &format!("{}_user", id),
+                &format!("{}_user@example.com", id),
+                &format!("{}_user_pw", id),
+            )
+            .await
+            .unwrap();
+        user
+    }
+
+    pub async fn create_initial_user(
+        auth_service: &AuthService,
+        user_service: &UserService,
+    ) -> (User, UserSession) {
+        let user = create_user("initial", user_service).await;
+        let user_session = auth_service.create_user_session(user.id).await.unwrap();
+        (user, user_session)
+    }
+}
