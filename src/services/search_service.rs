@@ -188,3 +188,46 @@ impl SearchService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use rocket::futures::executor::block_on;
+
+    pub struct IndexDropper {
+        client: Client,
+        index_prefix: String,
+    }
+
+    impl IndexDropper {
+        pub fn new(
+            url: &str,
+            master_key: Option<impl AsRef<str>>,
+            index_prefix: impl Into<String>,
+        ) -> Self {
+            let client = Client::new(url, master_key.as_ref().map(|key| key.as_ref()));
+            let index_prefix = index_prefix.into();
+
+            Self {
+                client,
+                index_prefix,
+            }
+        }
+
+        async fn drop_async(&self) {
+            let indices = self.client.list_all_indexes().await.unwrap();
+
+            for index in indices.results {
+                if index.uid.starts_with(&self.index_prefix) {
+                    self.client.delete_index(&index.uid).await.ok();
+                }
+            }
+        }
+    }
+
+    impl Drop for IndexDropper {
+        fn drop(&mut self) {
+            block_on(self.drop_async());
+        }
+    }
+}

@@ -1,7 +1,7 @@
 mod compute_file_hash;
 mod compute_file_mime;
 
-use super::{FileDriver, StagingFileService, StagingFileServiceError};
+use super::{FileDriver, SearchService, StagingFileService, StagingFileServiceError};
 use crate::db::models::{CreatingFile, File};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
@@ -34,6 +34,7 @@ pub enum FileServiceError {
 pub struct FileService {
     db_pool: Pool<AsyncPgConnection>,
     staging_file_service: Arc<StagingFileService>,
+    search_service: Arc<SearchService>,
     file_driver: Arc<dyn FileDriver + Send + Sync>,
 }
 
@@ -41,11 +42,13 @@ impl FileService {
     pub fn new(
         db_pool: Pool<AsyncPgConnection>,
         staging_file_service: Arc<StagingFileService>,
+        search_service: Arc<SearchService>,
         file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
     ) -> Arc<Self> {
         Arc::new(Self {
             db_pool,
             staging_file_service,
+            search_service,
             file_driver,
         })
     }
@@ -120,6 +123,9 @@ impl FileService {
 
                 self.file_driver.commit_staging(staging_file.id).await?;
 
+                // ignore the error if the indexing fails, as it is not critical
+                self.search_service.index_file(&file).await.ok();
+
                 Ok(Some(file))
             }
             .scope_boxed()
@@ -152,6 +158,9 @@ impl FileService {
         if file.is_some() {
             // it is safe to ignore the result of this operation
             self.file_driver.remove(file_id).await.ok();
+
+            // ignore the error if the indexing fails, as it is not critical
+            self.search_service.remove_file_by_id(file_id).await.ok();
         }
 
         Ok(file)

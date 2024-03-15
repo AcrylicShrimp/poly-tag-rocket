@@ -1,3 +1,4 @@
+use super::SearchService;
 use crate::db::models::{Collection, CreatingCollection, UpdatingCollection};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
@@ -15,11 +16,15 @@ pub enum CollectionServiceError {
 
 pub struct CollectionService {
     db_pool: Pool<AsyncPgConnection>,
+    search_service: Arc<SearchService>,
 }
 
 impl CollectionService {
-    pub fn new(db_pool: Pool<AsyncPgConnection>) -> Arc<Self> {
-        Arc::new(Self { db_pool })
+    pub fn new(db_pool: Pool<AsyncPgConnection>, search_service: Arc<SearchService>) -> Arc<Self> {
+        Arc::new(Self {
+            db_pool,
+            search_service,
+        })
     }
 
     /// Creates a new collection.
@@ -41,6 +46,9 @@ impl CollectionService {
             ))
             .get_result::<Collection>(db)
             .await?;
+
+        // ignore the error if the indexing fails, as it is not critical
+        self.search_service.index_collection(&collection).await.ok();
 
         Ok(collection)
     }
@@ -66,6 +74,14 @@ impl CollectionService {
         .get_result::<Collection>(db)
         .await
         .optional()?;
+
+        if collection.is_some() {
+            // ignore the error if the indexing fails, as it is not critical
+            self.search_service
+                .remove_collection_by_id(collection_id)
+                .await
+                .ok();
+        }
 
         Ok(collection)
     }
@@ -154,6 +170,11 @@ impl CollectionService {
         .get_result::<Collection>(db)
         .await
         .optional()?;
+
+        if let Some(collection) = &collection {
+            // ignore the error if the indexing fails, as it is not critical
+            self.search_service.index_collection(collection).await.ok();
+        }
 
         Ok(collection)
     }

@@ -2,6 +2,7 @@ use crate::{
     config::AppConfig,
     create_rocket_instance,
     db::{self, test::DatabaseDropper},
+    services::test::IndexDropper,
     setup_rocket_instance,
 };
 use rocket::{Build, Rocket};
@@ -10,7 +11,7 @@ use uuid::Uuid;
 
 /// Creates a new Rocket instance for testing.
 /// It creates a new database for the test and runs the migrations.
-pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
+pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper, IndexDropper) {
     let mut app_config = AppConfig::load(None as Option<PathBuf>).unwrap();
 
     let database_url_base = app_config.database_url_base.clone();
@@ -20,17 +21,26 @@ pub async fn create_test_rocket_instance() -> (Rocket<Build>, DatabaseDropper) {
     let database_name =
         db::test::create_test_database(&database_url_base, &maintenance_database_name, &id)
             .unwrap();
-    app_config.database_name = database_name.clone();
+    let index_prefix = format!("__test_{}_", id);
 
-    let rocket = create_rocket_instance(&app_config).unwrap();
-    let rocket = setup_rocket_instance(app_config, rocket).await.unwrap();
+    app_config.database_name = database_name.clone();
+    app_config.meilisearch_index_prefix = Some(index_prefix.clone());
+
+    let index_dropper = IndexDropper::new(
+        &app_config.meilisearch_url,
+        app_config.meilisearch_master_key.as_ref(),
+        &index_prefix,
+    );
     let database_dropper = DatabaseDropper::new(
         &database_url_base,
         &maintenance_database_name,
         &database_name,
     );
 
-    (rocket, database_dropper)
+    let rocket = create_rocket_instance(&app_config).unwrap();
+    let rocket = setup_rocket_instance(app_config, rocket).await.unwrap();
+
+    (rocket, database_dropper, index_dropper)
 }
 
 pub mod helpers {

@@ -76,7 +76,7 @@ impl Fairing for StagingFileRemover {
             drop(stop_signal_sender_lock);
 
             if let Some(stop_signal_sender) = stop_signal_sender {
-                let _ = stop_signal_sender.send(());
+                stop_signal_sender.send(()).ok();
             }
 
             let mut task_join_handle_lock = self.task_join_handle.lock();
@@ -87,7 +87,7 @@ impl Fairing for StagingFileRemover {
         };
 
         if let Some(task_join_handle) = task_join_handle {
-            let _ = task_join_handle.await;
+            task_join_handle.await.ok();
         }
 
         log::info!(target: "staging_file_remover", "Staging file remover shut down.");

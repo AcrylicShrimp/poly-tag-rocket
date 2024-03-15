@@ -23,13 +23,19 @@ use std::sync::Arc;
 pub fn register_services(
     rocket: Rocket<Build>,
     db_pool: Pool<AsyncPgConnection>,
+    search_service: Arc<SearchService>,
     file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
 ) -> Rocket<Build> {
     let password_service = PasswordService::new();
     let auth_service = AuthService::new(db_pool.clone(), password_service.clone());
-    let collection_service = CollectionService::new(db_pool.clone());
+    let collection_service = CollectionService::new(db_pool.clone(), search_service.clone());
     let staging_file_service = StagingFileService::new(db_pool.clone(), file_driver.clone());
-    let file_service = FileService::new(db_pool.clone(), staging_file_service.clone(), file_driver);
+    let file_service = FileService::new(
+        db_pool.clone(),
+        staging_file_service.clone(),
+        search_service,
+        file_driver,
+    );
     let user_service = UserService::new(db_pool, password_service.clone());
 
     // search_service is not included; it should be added manually.
