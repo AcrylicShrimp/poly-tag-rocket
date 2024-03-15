@@ -40,6 +40,16 @@ jobs:
         ports:
           - 5432:5432
 
+      meilisearch:
+        image: getmeili/meilisearch
+        options: >-
+          --health-cmd "wget -q localhost:7700/health -O /dev/null"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 7700:7700
+
     steps:
     - uses: actions/checkout@v4
 
@@ -59,3 +69,5 @@ jobs:
         DATABASE_URL_BASE: postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432
         DATABASE_NAME: ${{ env.POSTGRES_DB }}
         MAINTENANCE_DATABASE_NAME: postgres
+
+        MEILISEARCH_URL: http://localhost:7700
