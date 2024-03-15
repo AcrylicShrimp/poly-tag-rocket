@@ -15,12 +15,19 @@ use std::{
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppLimit {
+    #[serde(default = "app_limit_defaults::form")]
     pub form: ByteUnit,
+    #[serde(default = "app_limit_defaults::data_form")]
     pub data_form: ByteUnit,
+    #[serde(default = "app_limit_defaults::file")]
     pub file: ByteUnit,
+    #[serde(default = "app_limit_defaults::string")]
     pub string: ByteUnit,
+    #[serde(default = "app_limit_defaults::bytes")]
     pub bytes: ByteUnit,
+    #[serde(default = "app_limit_defaults::json")]
     pub json: ByteUnit,
+    #[serde(default = "app_limit_defaults::msgpack")]
     pub msgpack: ByteUnit,
 }
 
@@ -38,13 +45,45 @@ impl Default for AppLimit {
     }
 }
 
+mod app_limit_defaults {
+    use rocket::data::{ByteUnit, Limits};
+
+    pub fn form() -> ByteUnit {
+        Limits::FORM
+    }
+
+    pub fn data_form() -> ByteUnit {
+        Limits::DATA_FORM
+    }
+
+    pub fn file() -> ByteUnit {
+        Limits::FILE
+    }
+
+    pub fn string() -> ByteUnit {
+        Limits::STRING
+    }
+
+    pub fn bytes() -> ByteUnit {
+        Limits::BYTES
+    }
+
+    pub fn json() -> ByteUnit {
+        Limits::JSON
+    }
+
+    pub fn msgpack() -> ByteUnit {
+        Limits::MESSAGE_PACK
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AppConfig {
     /// The address to bind the server to.
-    #[serde(default = "defaults::address")]
+    #[serde(default = "app_config_defaults::address")]
     pub address: IpAddr,
     /// The port to bind the server to.
-    #[serde(default = "defaults::port")]
+    #[serde(default = "app_config_defaults::port")]
     pub port: u16,
     /// The base path for the file storage.
     pub file_base_path: PathBuf,
@@ -63,22 +102,22 @@ pub struct AppConfig {
     /// The name of the default or maintenance database in PostgreSQL.
     /// It is used to create databases during tests.
     #[cfg(test)]
-    #[serde(default = "defaults::maintenance_database_name")]
+    #[serde(default = "app_config_defaults::maintenance_database_name")]
     pub maintenance_database_name: String,
     /// The limits for the application.
     #[serde(default)]
     pub limits: AppLimit,
     /// The period to remove expired staging files.
     /// The period is in seconds.
-    #[serde(default = "defaults::expired_staging_file_removal_period")]
+    #[serde(default = "app_config_defaults::expired_staging_file_removal_period")]
     pub expired_staging_file_removal_period: u64,
     /// The expiration for staging files.
     /// The expiration is in seconds.
-    #[serde(default = "defaults::expired_staging_file_expiration")]
+    #[serde(default = "app_config_defaults::expired_staging_file_expiration")]
     pub expired_staging_file_expiration: u64,
 }
 
-mod defaults {
+mod app_config_defaults {
     use std::net::IpAddr;
 
     pub fn address() -> IpAddr {
