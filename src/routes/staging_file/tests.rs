@@ -116,3 +116,92 @@ async fn test_remove_staging_file() {
 
     assert_eq!(raw_removed_staging_file, None);
 }
+
+#[rocket::async_test]
+async fn test_get_staging_file() {
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let staging_file = staging_file_service
+        .create_staging_file("staging_file", Some("video/mp4"))
+        .await
+        .unwrap();
+
+    let response = client
+        .get(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(ContentType::JSON)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let retrieved_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(retrieved_staging_file, staging_file);
+
+    let raw_retrieved_staging_file = staging_file_service
+        .get_staging_file_by_id(retrieved_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_retrieved_staging_file, retrieved_staging_file);
+}
+
+#[rocket::async_test]
+async fn test_fill_staging_file() {
+    let (rocket, _database_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let staging_file = staging_file_service
+        .create_staging_file("staging_file", Some("video/mp4"))
+        .await
+        .unwrap();
+
+    let file_content = "file content";
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(ContentType::Binary)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(file_content)
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(filled_staging_file.name, staging_file.name);
+    assert_eq!(filled_staging_file.mime, staging_file.mime);
+    assert_eq!(filled_staging_file.size, file_content.len() as i64);
+
+    let raw_filled_staging_file = staging_file_service
+        .get_staging_file_by_id(filled_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_filled_staging_file, filled_staging_file);
+}
