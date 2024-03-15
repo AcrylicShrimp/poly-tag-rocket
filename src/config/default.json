@@ -13,5 +13,7 @@
     "bytes": "8KiB",
     "json": "1MiB",
     "msgpack": "1MiB"
-  }
+  },
+  "expired_staging_file_removal_period": 3600,
+  "expired_staging_file_expiration": 86400
 }

@@ -1,6 +1,7 @@
 mod config;
 mod db;
 mod dto;
+mod fairings;
 mod guards;
 mod routes;
 mod services;
@@ -8,7 +9,12 @@ mod services;
 #[cfg(test)]
 mod test;
 
-use crate::{config::AppConfig, services::local_file_system::LocalFileSystem};
+use crate::{
+    config::AppConfig,
+    fairings::staging_file_remover::StagingFileRemover,
+    services::{local_file_system::LocalFileSystem, StagingFileService},
+};
+use chrono::Duration;
 use clap::{Arg, ArgAction, Command, ValueHint};
 use const_format::formatcp;
 use dto::Error;
@@ -126,7 +132,7 @@ async fn main() {
             }
         }
 
-        eprintln!("Error occurred!");
+        eprintln!("Command failed.");
         eprintln!("{}", err);
     }
 }
@@ -210,6 +216,14 @@ fn test_config(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(), AppE
         "    - msgpack: {}",
         rocket_config.limits.get("msgpack").unwrap()
     );
+    println!(
+        "- expired_staging_file_removal_period: {}",
+        app_config.expired_staging_file_removal_period
+    );
+    println!(
+        "- expired_staging_file_expiration: {}",
+        app_config.expired_staging_file_expiration
+    );
 
     Ok(())
 }
@@ -226,7 +240,7 @@ async fn run_server(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(),
 
     log::info!(target: "init", app_config:serde; "Configuration has been loaded.");
 
-    let rocket = setup_rocket_instance(app_config, rocket).await?;
+    let rocket = setup_rocket_instance(app_config, rocket, true).await?;
     let _rocket = rocket.launch().await?;
 
     Ok(())
@@ -245,6 +259,7 @@ pub fn create_rocket_instance(app_config: &AppConfig) -> Result<Rocket<Build>, A
 pub async fn setup_rocket_instance(
     app_config: AppConfig,
     rocket: Rocket<Build>,
+    attach_fairings: bool,
 ) -> Result<Rocket<Build>, AppError> {
     let database_url_base = &app_config.database_url_base;
     let database_name = &app_config.database_name;
@@ -269,9 +284,24 @@ pub async fn setup_rocket_instance(
     let file_driver = LocalFileSystem::new(temp_base_path, file_base_path).await?;
 
     let rocket = rocket.register("/", catchers![default_catcher]);
-    let rocket = rocket.manage(app_config);
     let rocket = services::register_services(rocket, db_pool, Arc::new(file_driver));
     let rocket = routes::register_routes(rocket);
+
+    let rocket = if attach_fairings {
+        let staging_file_remover = StagingFileRemover::new(
+            Duration::new(app_config.expired_staging_file_removal_period as i64, 0).unwrap(),
+            Duration::new(app_config.expired_staging_file_expiration as i64, 0).unwrap(),
+            rocket.state::<Arc<StagingFileService>>().unwrap().clone(),
+        );
+
+        let rocket = rocket.attach(staging_file_remover);
+
+        rocket
+    } else {
+        rocket
+    };
+
+    let rocket = rocket.manage(app_config);
 
     Ok(rocket)
 }

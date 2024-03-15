@@ -28,3 +28,11 @@ string = "8KiB"
 bytes = "8KiB"
 json = "1MiB"
 msgpack = "1MiB"
+
+# The period to remove expired staging files.
+# The period is in seconds.
+remove_expired_staging_files_period = 3600
+
+# The expiration for staging files.
+# The expiration is in seconds.
+expired_staging_file_expiration = 86400

@@ -12,6 +12,12 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use uuid::Uuid;
 
+#[derive(Debug)]
+pub struct ExpiredStagingFileRemovalError {
+    pub id: Uuid,
+    pub error: std::io::Error,
+}
+
 #[derive(Error, Debug)]
 pub enum StagingFileServiceError {
     #[error("database pool error: {0}")]
@@ -114,7 +120,7 @@ impl StagingFileService {
         &self,
         duration: Duration,
         limit: u32,
-    ) -> Result<usize, StagingFileServiceError> {
+    ) -> Result<(usize, Vec<ExpiredStagingFileRemovalError>), StagingFileServiceError> {
         use crate::db::schema;
 
         let now = Utc::now().naive_utc();
@@ -144,8 +150,14 @@ impl StagingFileService {
         async fn remove_staging_file(
             file_driver: Arc<dyn FileDriver + Send + Sync>,
             staging_file_id: Uuid,
-        ) {
-            file_driver.remove_staging(staging_file_id).await.ok();
+        ) -> Result<(), ExpiredStagingFileRemovalError> {
+            match file_driver.remove_staging(staging_file_id).await {
+                Ok(_) => Ok(()),
+                Err(err) => Err(ExpiredStagingFileRemovalError {
+                    id: staging_file_id,
+                    error: err,
+                }),
+            }
         }
 
         for staging_file_id in &expired_staging_files {
@@ -154,9 +166,24 @@ impl StagingFileService {
             removal_tasks.spawn_local(task);
         }
 
-        removal_tasks.detach_all();
+        let mut removal_errors = Vec::with_capacity(expired_staging_files.len());
 
-        Ok(expired_staging_files.len())
+        while let Some(result) = removal_tasks.join_next().await {
+            let result = match result {
+                Ok(result) => result,
+                Err(err) => {
+                    log::warn!(target: "staging_file_service", err:err; "Join with removal task failed.");
+                    // it is not critical to fail to join with a removal task
+                    continue;
+                }
+            };
+
+            if let Err(err) = result {
+                removal_errors.push(err);
+            }
+        }
+
+        Ok((expired_staging_files.len(), removal_errors))
     }
 
     /// Retrieves a staging file by its ID.

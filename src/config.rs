@@ -68,6 +68,14 @@ pub struct AppConfig {
     /// The limits for the application.
     #[serde(default)]
     pub limits: AppLimit,
+    /// The period to remove expired staging files.
+    /// The period is in seconds.
+    #[serde(default = "defaults::expired_staging_file_removal_period")]
+    pub expired_staging_file_removal_period: u64,
+    /// The expiration for staging files.
+    /// The expiration is in seconds.
+    #[serde(default = "defaults::expired_staging_file_expiration")]
+    pub expired_staging_file_expiration: u64,
 }
 
 mod defaults {
@@ -84,6 +92,14 @@ mod defaults {
     #[cfg(test)]
     pub fn maintenance_database_name() -> String {
         "postgres".to_owned()
+    }
+
+    pub fn expired_staging_file_removal_period() -> u64 {
+        60 * 60
+    }
+
+    pub fn expired_staging_file_expiration() -> u64 {
+        60 * 60 * 24
     }
 }
 
@@ -127,6 +143,7 @@ impl AppConfig {
         config.limits = self.make_limits();
         config.ident = Ident::none();
         config.keep_alive = 60;
+        config.cli_colors = false;
 
         config
     }

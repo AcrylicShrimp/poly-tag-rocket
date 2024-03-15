@@ -1217,6 +1217,7 @@ dependencies = [
  "infer",
  "log",
  "mime_guess",
+ "parking_lot",
  "rocket",
  "serde",
  "serde_json",
