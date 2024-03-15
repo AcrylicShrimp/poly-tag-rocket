@@ -215,13 +215,23 @@ pub mod test {
         }
 
         async fn drop_async(&self) {
-            let indices = self.client.list_all_indexes().await.unwrap();
+            let task = self
+                .client
+                .delete_index(format!("{}_collections", self.index_prefix))
+                .await
+                .unwrap();
+            task.wait_for_completion(&self.client, None, None)
+                .await
+                .unwrap();
 
-            for index in indices.results {
-                if index.uid.starts_with(&self.index_prefix) {
-                    self.client.delete_index(&index.uid).await.ok();
-                }
-            }
+            let task = self
+                .client
+                .delete_index(format!("{}_files", self.index_prefix))
+                .await
+                .unwrap();
+            task.wait_for_completion(&self.client, None, None)
+                .await
+                .unwrap();
         }
     }
 
