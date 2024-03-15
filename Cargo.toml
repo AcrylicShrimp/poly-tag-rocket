@@ -18,9 +18,14 @@ diesel = { version = "2", features = ["postgres", "chrono", "uuid"] }
 diesel-async = { version = "0.4", features = ["postgres", "deadpool"] }
 diesel_migrations = { version = "2", features = ["postgres"] }
 either = { version = "1" }
+env_logger = { version = "0.11", features = ["unstable-kv"] }
 figment = { version = "0.10", features = ["toml", "yaml", "json"] }
 infer = { version = "0.15" }
-log = { version = "0.4", features = ["kv_std", "kv_serde"] }
+log = { version = "0.4", features = [
+    "kv_std",
+    "kv_serde",
+    "release_max_level_info",
+] }
 mime_guess = { version = "2" }
 parking_lot = { version = "0.12", features = [
     "hardware-lock-elision",

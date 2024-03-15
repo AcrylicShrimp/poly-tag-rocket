@@ -143,7 +143,6 @@ impl AppConfig {
         config.limits = self.make_limits();
         config.ident = Ident::none();
         config.keep_alive = 60;
-        config.cli_colors = false;
 
         config
     }
