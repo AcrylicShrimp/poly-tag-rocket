@@ -123,6 +123,13 @@ async fn test_remove_file() {
     let raw_removed_file = file_service.get_file_by_id(removed_file.id).await.unwrap();
 
     assert_eq!(raw_removed_file, None);
+
+    let raw_removed_file_data = file_service
+        .get_file_data_by_id(removed_file.id)
+        .await
+        .unwrap();
+
+    assert!(raw_removed_file_data.is_none());
 }
 
 #[rocket::async_test]
