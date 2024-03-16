@@ -232,8 +232,168 @@ async fn test_fill_staging_file_with_offset() {
     assert_eq!(raw_filled_staging_file, filled_staging_file);
 
     let extra_file_content = "new file content";
-    let offset = file_content.len() as u64;
-    let file_content = format!("{}{}", file_content, extra_file_content);
+    let offset = 6;
+    let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(Header::new("Offset", offset.to_string()))
+        .header(ContentType::Binary)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(extra_file_content)
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(filled_staging_file.name, staging_file.name);
+    assert_eq!(filled_staging_file.mime, staging_file.mime);
+    assert_eq!(filled_staging_file.size, file_content.len() as i64);
+
+    let raw_filled_staging_file = staging_file_service
+        .get_staging_file_by_id(filled_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_filled_staging_file, filled_staging_file);
+}
+
+#[rocket::async_test]
+async fn test_fill_staging_file_with_offset_min() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let staging_file = staging_file_service
+        .create_staging_file("staging_file", Some("video/mp4"))
+        .await
+        .unwrap();
+
+    let file_content = "file content";
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(ContentType::Binary)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(file_content)
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(filled_staging_file.name, staging_file.name);
+    assert_eq!(filled_staging_file.mime, staging_file.mime);
+    assert_eq!(filled_staging_file.size, file_content.len() as i64);
+
+    let raw_filled_staging_file = staging_file_service
+        .get_staging_file_by_id(filled_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_filled_staging_file, filled_staging_file);
+
+    let extra_file_content = "new file content";
+    let offset = 0;
+    let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(Header::new("Offset", offset.to_string()))
+        .header(ContentType::Binary)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(extra_file_content)
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(filled_staging_file.name, staging_file.name);
+    assert_eq!(filled_staging_file.mime, staging_file.mime);
+    assert_eq!(filled_staging_file.size, file_content.len() as i64);
+
+    let raw_filled_staging_file = staging_file_service
+        .get_staging_file_by_id(filled_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_filled_staging_file, filled_staging_file);
+}
+
+#[rocket::async_test]
+async fn test_fill_staging_file_with_offset_max() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let staging_file = staging_file_service
+        .create_staging_file("staging_file", Some("video/mp4"))
+        .await
+        .unwrap();
+
+    let file_content = "file content";
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(ContentType::Binary)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(file_content)
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(filled_staging_file.name, staging_file.name);
+    assert_eq!(filled_staging_file.mime, staging_file.mime);
+    assert_eq!(filled_staging_file.size, file_content.len() as i64);
+
+    let raw_filled_staging_file = staging_file_service
+        .get_staging_file_by_id(filled_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_filled_staging_file, filled_staging_file);
+
+    let extra_file_content = "new file content";
+    let offset = file_content.len();
+    let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
 
     let response = client
         .put(format!("/staging-files/{}", staging_file.id))
