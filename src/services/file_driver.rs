@@ -25,11 +25,35 @@ pub enum WriteError {
     #[error("offset is larger than the maximum allowed value: {max_offset} < {offset}")]
     OffsetTooLarge { max_offset: u64, offset: u64 },
     /// An I/O error occurred while writing the file.
-    #[error("IO error: {io_error}")]
+    #[error("io error: {io_error}")]
     Write {
         io_error: std::io::Error,
         file_size: u64,
     },
+}
+
+#[derive(Error, Debug)]
+pub enum ReadError {
+    /// The range `start` exceeds the file size.
+    #[error("range start exceeds file size: {file_size} < {start}")]
+    RangeStartExceedsFileSize { start: u64, file_size: u64 },
+    /// The range `end` exceeds the file size.
+    #[error("range end exceeds file size: {file_size} < {end}")]
+    RangeEndExceedsFileSize { end: u64, file_size: u64 },
+    /// An I/O error occurred while reading the file.
+    #[error("io error: {io_error}")]
+    Read {
+        #[from]
+        io_error: std::io::Error,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ReadRange {
+    Full,
+    Start(u64),
+    Range(u64, u64),
+    Suffix(u32),
 }
 
 #[async_trait]
@@ -69,5 +93,6 @@ pub trait FileDriver {
     async fn read(
         &self,
         id: Uuid,
-    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, std::io::Error>;
+        range: ReadRange,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, ReadError>;
 }

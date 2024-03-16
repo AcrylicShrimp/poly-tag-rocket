@@ -67,6 +67,13 @@ impl<'r> FromRequest<'r> for AuthUserSession<'r> {
     }
 }
 
+fn make_bad_request<T>(msg: impl Into<String>) -> Outcome<T, Error> {
+    Outcome::Error((
+        Status::BadRequest,
+        Error::new_dynamic(Status::BadRequest, msg),
+    ))
+}
+
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct OffsetHeader {
     pub offset: Option<u64>,
@@ -81,12 +88,127 @@ impl<'r> FromRequest<'r> for OffsetHeader {
             Some(offset) => match offset.parse::<u64>() {
                 Ok(offset) => Some(offset),
                 Err(_) => {
-                    return Outcome::Error((Status::BadRequest, Error::new_dynamic(Status::BadRequest, format!("offset `{}` in header is invalid; it should be non-negative integer.", offset))));
+                    return make_bad_request(format!(
+                        "offset `{}` in header is invalid; it should be non-negative integer.",
+                        offset
+                    ));
                 }
             },
             None => None,
         };
 
-        Outcome::Success(OffsetHeader { offset })
+        Outcome::Success(Self { offset })
+    }
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct RangeHeader {
+    pub range: Option<(i64, Option<i64>)>,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for RangeHeader {
+    type Error = Error;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let range = match request.headers().get_one("Range") {
+            Some(range) => range,
+            None => {
+                return Outcome::Success(Self { range: None });
+            }
+        };
+
+        let range = range.trim();
+
+        if !range.starts_with("bytes=") {
+            return make_bad_request("range header should start with `bytes=`.");
+        }
+
+        let range = range.strip_prefix("bytes").unwrap_or(range).trim();
+        let range = range.strip_prefix("=").unwrap_or(range).trim();
+
+        // ignore multiple ranges
+        let range = match range.split_once(',') {
+            Some((range, _)) => range,
+            None => range,
+        };
+
+        let (start, end) = if range.starts_with('-') {
+            // suffix pattern: -start
+            (range, None)
+        } else {
+            match range.split_once('-') {
+                Some((start, end)) => (start.trim(), Some(end.trim())),
+                None => (range, None),
+            }
+        };
+
+        let start = match start.parse::<i64>() {
+            Ok(start) => start,
+            Err(_) => {
+                return make_bad_request(format!(
+                    "start `{}` in range header is invalid; it should be integer.",
+                    start
+                ));
+            }
+        };
+        let end = match end {
+            Some(end) if !end.is_empty() => match end.parse::<i64>() {
+                Ok(end) => Some(end),
+                Err(_) => {
+                    return make_bad_request(format!(
+                        "end `{}` in range header is invalid; it should be integer.",
+                        end
+                    ));
+                }
+            },
+            _ => None,
+        };
+
+        match end {
+            Some(end) => {
+                // pattern: start-end
+                // start and end must be non-negative integers
+                if start < 0 {
+                    return make_bad_request(format!(
+                        "start `{}` in range header is less than 0.",
+                        start
+                    ));
+                }
+
+                if end < 0 {
+                    return make_bad_request(format!(
+                        "end `{}` in range header is less than 0.",
+                        end
+                    ));
+                }
+
+                // start must be less than or equal to end
+                if end < start {
+                    return make_bad_request(format!(
+                        "start `{}` in range header is greater than end `{}`.",
+                        start, end
+                    ));
+                }
+            }
+            _ if range.ends_with("-") => {
+                // pattern: start-
+                // start must be non-negative integer
+                if start < 0 {
+                    return make_bad_request(format!(
+                        "start `{}` in range header is less than 0.",
+                        start
+                    ));
+                }
+            }
+            _ => {
+                // pattern: start
+                // start can be negative in this case
+            }
+        }
+
+        Outcome::Success(Self {
+            range: Some((start, end)),
+        })
     }
 }

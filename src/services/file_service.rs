@@ -1,7 +1,9 @@
 mod compute_file_hash;
 mod compute_file_mime;
 
-use super::{FileDriver, SearchService, StagingFileService, StagingFileServiceError};
+use super::{
+    FileDriver, ReadError, ReadRange, SearchService, StagingFileService, StagingFileServiceError,
+};
 use crate::db::models::{CreatingFile, File};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
@@ -191,8 +193,9 @@ impl FileService {
     pub async fn get_file_data_by_id(
         &self,
         file_id: Uuid,
-    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, FileServiceError> {
-        let data = self.file_driver.read(file_id).await?;
+        range: ReadRange,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, ReadError> {
+        let data = self.file_driver.read(file_id, range).await?;
 
         Ok(data)
     }

@@ -1,9 +1,9 @@
-use super::{FileDriver, WriteError};
+use super::{FileDriver, ReadError, ReadRange, WriteError};
 use rocket::{async_trait, data::DataStream, tokio::fs::File};
 use std::{fs::Metadata, path::PathBuf, pin::Pin};
 use tokio::{
     fs::OpenOptions,
-    io::{AsyncRead, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
+    io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
 };
 use uuid::Uuid;
 
@@ -270,16 +270,69 @@ impl FileDriver for LocalFileSystem {
     async fn read(
         &self,
         id: Uuid,
-    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, std::io::Error> {
+        read_range: ReadRange,
+    ) -> Result<Option<Pin<Box<dyn AsyncRead + Send>>>, ReadError> {
         let path = self.generate_resident_file_path(id);
 
-        match File::open(&path).await {
-            Ok(file) => Ok(Some(Box::pin(BufReader::new(file)))),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        let mut file = match File::open(&path).await {
+            Ok(file) => file,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(None);
+            }
             Err(err) => {
                 log::error!(target: "file_driver", method="read", id:serde, path:?, err:err; "Failed to open file.");
-                Err(err)
+                return Err(ReadError::Read { io_error: err });
             }
-        }
+        };
+        let file_size = file.metadata().await.map(|meta| meta.len());
+        let file_size = match file_size {
+            Ok(file_size) => file_size,
+            Err(err) => {
+                log::error!(target: "file_driver", method="read", id:serde, path:?, err:err; "Failed to get file size.");
+                return Err(ReadError::Read { io_error: err });
+            }
+        };
+
+        let reader: Pin<Box<dyn AsyncRead + Send>> = match read_range {
+            ReadRange::Full => Box::pin(BufReader::new(file)),
+            ReadRange::Start(start) => {
+                if file_size <= start {
+                    return Err(ReadError::RangeStartExceedsFileSize { start, file_size });
+                }
+
+                if let Err(err) = file.seek(SeekFrom::Start(start)).await {
+                    log::error!(target: "file_driver", method="read", id:serde, path:?, file_size, start, err:err; "Failed to seek file.");
+                    return Err(ReadError::Read { io_error: err });
+                }
+
+                Box::pin(BufReader::new(file))
+            }
+            ReadRange::Range(start, end) => {
+                if file_size <= end {
+                    return Err(ReadError::RangeEndExceedsFileSize { end, file_size });
+                }
+
+                if let Err(err) = file.seek(SeekFrom::Start(start)).await {
+                    log::error!(target: "file_driver", method="read", id:serde, path:?, file_size, start, end, err:err; "Failed to seek file.");
+                    return Err(ReadError::Read { io_error: err });
+                }
+
+                Box::pin(BufReader::new(file.take(end - start + 1)))
+            }
+            ReadRange::Suffix(suffix) => {
+                // it is allowed to specify a suffix that is larger than the file size.
+                // in that case, we just read the entire file instead.
+                let suffix = (suffix as u64).min(file_size);
+
+                if let Err(err) = file.seek(SeekFrom::End(-(suffix as i64))).await {
+                    log::error!(target: "file_driver", method="read", id:serde, path:?, file_size, suffix, err:err; "Failed to seek file.");
+                    return Err(ReadError::Read { io_error: err });
+                }
+
+                Box::pin(BufReader::new(file))
+            }
+        };
+
+        Ok(Some(reader))
     }
 }
