@@ -3,7 +3,7 @@ use crate::{
     config::AppConfig,
     db::models::StagingFile,
     dto::{Error, JsonRes},
-    guards::AuthUserSession,
+    guards::{AuthUserSession, OffsetHeader},
     services::{StagingFileService, WriteError},
 };
 use rocket::{
@@ -100,11 +100,12 @@ async fn fill_staging_file(
     app_config: &State<AppConfig>,
     staging_file_service: &State<Arc<StagingFileService>>,
     staging_file_id: Uuid,
+    offset_header: OffsetHeader,
     body: Data<'_>,
 ) -> JsonRes<StagingFile> {
     let stream = body.open(app_config.limits.file);
     let staging_file = staging_file_service
-        .fill_staging_file_by_id(staging_file_id, None, stream)
+        .fill_staging_file_by_id(staging_file_id, offset_header.offset, stream)
         .await;
 
     let staging_file = match staging_file {

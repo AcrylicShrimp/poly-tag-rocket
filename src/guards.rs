@@ -66,3 +66,27 @@ impl<'r> FromRequest<'r> for AuthUserSession<'r> {
         Outcome::Success(AuthUserSession { user, token })
     }
 }
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct OffsetHeader {
+    pub offset: Option<u64>,
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for OffsetHeader {
+    type Error = Error;
+
+    async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+        let offset = match request.headers().get_one("Offset") {
+            Some(offset) => match offset.parse::<u64>() {
+                Ok(offset) => Some(offset),
+                Err(_) => {
+                    return Outcome::Error((Status::BadRequest, Error::new_dynamic(Status::BadRequest, format!("offset `{}` in header is invalid; it should be non-negative integer.", offset))));
+                }
+            },
+            None => None,
+        };
+
+        Outcome::Success(OffsetHeader { offset })
+    }
+}
