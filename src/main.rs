@@ -1,3 +1,5 @@
+#![allow(clippy::let_and_return)]
+
 mod config;
 mod db;
 mod dto;
@@ -18,8 +20,7 @@ use crate::{
 use chrono::Duration;
 use clap::{Arg, ArgAction, Command, ValueHint};
 use const_format::formatcp;
-use dto::Error;
-use rocket::{catch, catchers, http::Status, serde::json::Json, Build, Request, Rocket};
+use rocket::{catch, catchers, http::Status, Build, Request, Rocket};
 use std::{path::Path, sync::Arc};
 use thiserror::Error;
 
@@ -319,8 +320,6 @@ pub async fn setup_rocket_instance(
 }
 
 #[catch(default)]
-fn default_catcher(status: Status, _request: &Request) -> Json<Error> {
-    Json(Error {
-        error: status.reason_lossy().to_ascii_lowercase(),
-    })
+fn default_catcher(status: Status, _request: &Request) -> dto::Error {
+    status.into()
 }

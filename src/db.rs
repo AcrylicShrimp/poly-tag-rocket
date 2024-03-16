@@ -14,13 +14,13 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/db/migrations");
 #[derive(Error, Debug)]
 pub enum DBError {
     #[error("failed to connect to database: {0}")]
-    ConnectionError(#[from] diesel::ConnectionError),
+    Connection(#[from] diesel::ConnectionError),
     #[error("failed to run migrations: {0}")]
-    MigrationError(#[from] Box<dyn std::error::Error + Send + Sync>),
+    Migration(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error("failed to create database connection pool: {0}")]
-    PoolCreationError(#[from] diesel_async::pooled_connection::deadpool::BuildError),
+    PoolCreation(#[from] diesel_async::pooled_connection::deadpool::BuildError),
     #[error("failed to execute query: {0}")]
-    DieselError(#[from] diesel::result::Error),
+    Diesel(#[from] diesel::result::Error),
 }
 
 pub fn run_migrations(database_url_base: &str, database_name: &str) -> Result<(), DBError> {

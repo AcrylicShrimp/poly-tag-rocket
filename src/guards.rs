@@ -1,34 +1,13 @@
-use crate::{db::models::User, dto::StaticError, services::AuthService};
+use crate::{db::models::User, dto::Error, services::AuthService};
 use rocket::{
     http::Status,
     request::{FromRequest, Outcome, Request},
-    Responder, State,
+    State,
 };
+use serde::Serialize;
 use std::sync::Arc;
-use thiserror::Error;
 
-#[derive(Responder, Error, Debug)]
-#[response(content_type = "json")]
-pub enum GuardError {
-    #[response(status = 401)]
-    #[error("unauthorized")]
-    Unauthorized(StaticError),
-    #[response(status = 500)]
-    #[error("internal server error")]
-    InternalServerError(StaticError),
-}
-
-impl GuardError {
-    pub fn unauthorized() -> Self {
-        GuardError::Unauthorized(StaticError::unauthorized())
-    }
-
-    pub fn internal_server_error() -> Self {
-        GuardError::InternalServerError(StaticError::internal_server_error())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct AuthUserSession<'a> {
     pub user: User,
     pub token: &'a str,
@@ -46,25 +25,25 @@ fn parse_authorization_header(authorization: &str) -> Option<&str> {
 
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for AuthUserSession<'r> {
-    type Error = GuardError;
+    type Error = Error;
 
     async fn from_request(request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
         let authorization = match request.headers().get_one("Authorization") {
             Some(token) => token,
-            None => return Outcome::Error((Status::Unauthorized, GuardError::unauthorized())),
+            None => return Outcome::Error((Status::Unauthorized, Status::Unauthorized.into())),
         };
         let token = match parse_authorization_header(authorization) {
             Some(token) => token,
-            None => return Outcome::Error((Status::Unauthorized, GuardError::unauthorized())),
+            None => return Outcome::Error((Status::Unauthorized, Status::Unauthorized.into())),
         };
 
         let auth_service = match request.guard::<&State<Arc<AuthService>>>().await {
             Outcome::Success(auth_service) => auth_service,
-            Outcome::Error(_) => {
-                // TODO: log error
+            Outcome::Error(err) => {
+                log::error!(target: "guards::AuthUserSession", guard = "AuthUserSession", err:serde; "Failed to get AuthService from request guard.");
                 return Outcome::Error((
                     Status::InternalServerError,
-                    GuardError::internal_server_error(),
+                    Status::InternalServerError.into(),
                 ));
             }
             Outcome::Forward(status) => {
@@ -74,12 +53,12 @@ impl<'r> FromRequest<'r> for AuthUserSession<'r> {
 
         let user = match auth_service.get_user_from_session(token).await {
             Ok(Some(user)) => user,
-            Ok(None) => return Outcome::Error((Status::Unauthorized, GuardError::unauthorized())),
-            Err(_) => {
-                // TODO: log error
+            Ok(None) => return Outcome::Error((Status::Unauthorized, Status::Unauthorized.into())),
+            Err(err) => {
+                log::error!(target: "guards::AuthUserSession", guard = "AuthUserSession", service = "AuthService", err:err; "Failed to get user from session.");
                 return Outcome::Error((
                     Status::InternalServerError,
-                    GuardError::internal_server_error(),
+                    Status::InternalServerError.into(),
                 ));
             }
         };

@@ -2,7 +2,7 @@ use std::process::Command;
 
 fn get_git_commit_hash() -> String {
     let output = Command::new("git")
-        .args(&["rev-parse", "HEAD"])
+        .args(["rev-parse", "HEAD"])
         .output()
         .unwrap();
     let git_hash = String::from_utf8(output.stdout).unwrap();
@@ -11,7 +11,7 @@ fn get_git_commit_hash() -> String {
 
 fn get_git_commit_date() -> String {
     let output = Command::new("git")
-        .args(&["show", "-s", "--format=%cd", "--date=short", "HEAD"])
+        .args(["show", "-s", "--format=%cd", "--date=short", "HEAD"])
         .output()
         .unwrap();
     let git_date = String::from_utf8(output.stdout).unwrap();

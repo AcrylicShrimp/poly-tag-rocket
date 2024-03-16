@@ -247,11 +247,9 @@ impl FileDriver for LocalFileSystem {
                 log::warn!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to remove file.");
                 // removing the staging file is not critical, so we don't return the error.
             }
-        } else {
-            if let Err(err) = tokio::fs::rename(&staging_path, &resident_path).await {
-                log::error!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to rename file.");
-                return Err(err);
-            }
+        } else if let Err(err) = tokio::fs::rename(&staging_path, &resident_path).await {
+            log::error!(target: "file_driver", method="commit_staging", id:serde, staging_path:?, resident_path:?, err:err; "Failed to rename file.");
+            return Err(err);
         }
 
         Ok(())

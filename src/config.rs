@@ -183,16 +183,15 @@ impl AppConfig {
     }
 
     pub fn make_rocket_config(&self) -> Config {
-        let mut config = Config::default();
-
-        config.address = self.address;
-        config.port = self.port;
-        config.temp_dir = self.temp_base_path.clone().into();
-        config.limits = self.make_limits();
-        config.ident = Ident::none();
-        config.keep_alive = 60;
-
-        config
+        Config {
+            address: self.address,
+            port: self.port,
+            temp_dir: self.temp_base_path.clone().into(),
+            limits: self.make_limits(),
+            ident: Ident::none(),
+            keep_alive: 60,
+            ..Default::default()
+        }
     }
 
     fn make_limits(&self) -> Limits {

@@ -1,12 +1,17 @@
 use crate::{
     db::models::File,
-    dto::StaticError,
+    dto::{Error, JsonRes},
     guards::AuthUserSession,
     services::{FileService, FileServiceError},
 };
 use rocket::{
-    delete, get, http::Status, post, response::stream::ReaderStream, routes, serde::json::Json,
-    Build, Responder, Rocket, State,
+    delete, get,
+    http::{Status, StatusClass},
+    post,
+    response::stream::ReaderStream,
+    routes,
+    serde::json::Json,
+    Build, Rocket, State,
 };
 use std::{pin::Pin, sync::Arc};
 use tokio::io::AsyncRead;
@@ -19,54 +24,38 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
     )
 }
 
-#[derive(Responder)]
-#[response(content_type = "json")]
-enum Error {
-    #[response(status = 404)]
-    NotFoundError(StaticError),
-    #[response(status = 500)]
-    InternalServerError(StaticError),
-    Error((Status, Json<crate::dto::Error>)),
-}
-
-impl Error {
-    pub fn not_found_error() -> Self {
-        Error::NotFoundError(StaticError::not_found())
-    }
-
-    pub fn internal_server_error() -> Self {
-        Error::InternalServerError(StaticError::internal_server_error())
-    }
-
-    pub fn error(status: Status, error: String) -> Self {
-        Error::Error((status, Json(crate::dto::Error { error })))
-    }
-}
-
-impl From<FileServiceError> for Error {
-    fn from(err: FileServiceError) -> Self {
-        match err {
-            FileServiceError::FileNotYetFilled => {
-                Error::error(Status::UnprocessableEntity, format!("file not yet filled"))
-            }
-            _ => Self::internal_server_error(),
+fn map_file_service_err(err: &FileServiceError) -> Error {
+    match err {
+        FileServiceError::FileNotYetFilled => {
+            Error::new_dynamic(Status::UnprocessableEntity, "staging file not yet filled")
         }
+        _ => Status::InternalServerError.into(),
     }
 }
 
 #[post("/<staging_file_id>")]
 async fn create_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     file_service: &State<Arc<FileService>>,
     staging_file_id: Uuid,
-) -> Result<(Status, Json<File>), Error> {
+) -> JsonRes<File> {
     let file = file_service
         .create_file_from_staging_file_id(staging_file_id)
-        .await?;
+        .await;
+
     let file = match file {
-        Some(file) => file,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(file)) => file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            let error = map_file_service_err(&err);
+
+            if error.status().class() == StatusClass::ServerError {
+                log::error!(target: "routes::file::controllers", controller = "create_file", service = "FileService", staging_file_id:serde, err:err; "Error returned from service.");
+            }
+
+            return Err(error);
         }
     };
 
@@ -75,15 +64,20 @@ async fn create_file(
 
 #[delete("/<file_id>")]
 async fn remove_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     file_service: &State<Arc<FileService>>,
     file_id: Uuid,
-) -> Result<(Status, Json<File>), Error> {
-    let file = file_service.remove_file_by_id(file_id).await?;
+) -> JsonRes<File> {
+    let file = file_service.remove_file_by_id(file_id).await;
+
     let file = match file {
-        Some(file) => file,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(file)) => file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::file::controllers", controller = "remove_file", service = "FileService", file_id:serde, err:err; "Error returned from service.");
+            return Err(map_file_service_err(&err));
         }
     };
 
@@ -92,15 +86,20 @@ async fn remove_file(
 
 #[get("/<file_id>")]
 async fn get_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     file_service: &State<Arc<FileService>>,
     file_id: Uuid,
-) -> Result<(Status, Json<File>), Error> {
-    let file = file_service.get_file_by_id(file_id).await?;
+) -> JsonRes<File> {
+    let file = file_service.get_file_by_id(file_id).await;
+
     let file = match file {
-        Some(file) => file,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(file)) => file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::file::controllers", controller = "get_file", service = "FileService", file_id:serde, err:err; "Error returned from service.");
+            return Err(map_file_service_err(&err));
         }
     };
 
@@ -109,15 +108,20 @@ async fn get_file(
 
 #[get("/<file_id>/data")]
 async fn get_file_data(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     file_service: &State<Arc<FileService>>,
     file_id: Uuid,
 ) -> Result<(Status, ReaderStream![Pin<Box<dyn AsyncRead + Send>>]), Error> {
-    let data = file_service.get_file_data_by_id(file_id).await?;
+    let data = file_service.get_file_data_by_id(file_id).await;
+
     let data = match data {
-        Some(data) => data,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(data)) => data,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::file::controllers", controller = "get_file_data", service = "FileService", file_id:serde, err:err; "Error returned from service.");
+            return Err(map_file_service_err(&err));
         }
     };
 

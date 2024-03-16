@@ -2,13 +2,12 @@ use super::dto::CreatingStagingFile;
 use crate::{
     config::AppConfig,
     db::models::StagingFile,
-    dto::StaticError,
+    dto::{Error, JsonRes},
     guards::AuthUserSession,
-    services::{StagingFileService, StagingFileServiceError, WriteError},
+    services::{StagingFileService, WriteError},
 };
 use rocket::{
-    delete, get, http::Status, post, put, routes, serde::json::Json, Build, Data, Responder,
-    Rocket, State,
+    delete, get, http::Status, post, put, routes, serde::json::Json, Build, Data, Rocket, State,
 };
 use std::sync::Arc;
 use uuid::Uuid;
@@ -25,62 +24,46 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
     )
 }
 
-#[derive(Responder)]
-#[response(content_type = "json")]
-enum Error {
-    #[response(status = 404)]
-    NotFoundError(StaticError),
-    #[response(status = 500)]
-    InternalServerError(StaticError),
-    Error((Status, Json<crate::dto::Error>)),
-}
-
-impl Error {
-    pub fn not_found_error() -> Self {
-        Error::NotFoundError(StaticError::not_found())
-    }
-
-    pub fn internal_server_error() -> Self {
-        Error::InternalServerError(StaticError::internal_server_error())
-    }
-
-    pub fn error(status: Status, error: String) -> Self {
-        Error::Error((status, Json(crate::dto::Error { error })))
-    }
-}
-
-impl From<StagingFileServiceError> for Error {
-    fn from(_error: StagingFileServiceError) -> Self {
-        Error::InternalServerError(StaticError::internal_server_error())
-    }
-}
-
-#[post("/", data = "<data>")]
+#[post("/", data = "<body>")]
 async fn create_staging_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     staging_file_service: &State<Arc<StagingFileService>>,
-    data: Json<CreatingStagingFile<'_>>,
-) -> Result<(Status, Json<StagingFile>), Error> {
+    body: Json<CreatingStagingFile<'_>>,
+) -> JsonRes<StagingFile> {
     let staging_file = staging_file_service
-        .create_staging_file(data.name, data.mime)
-        .await?;
+        .create_staging_file(body.name, body.mime)
+        .await;
+
+    let staging_file = match staging_file {
+        Ok(staging_file) => staging_file,
+        Err(err) => {
+            let body = body.into_inner();
+            log::error!(target: "routes::staging_file::controllers", controller = "create_collection", service = "CollectionService", body:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
 
     Ok((Status::Created, Json(staging_file)))
 }
 
 #[delete("/<staging_file_id>")]
 async fn remove_staging_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     staging_file_service: &State<Arc<StagingFileService>>,
     staging_file_id: Uuid,
-) -> Result<(Status, Json<StagingFile>), Error> {
+) -> JsonRes<StagingFile> {
     let staging_file = staging_file_service
         .remove_staging_file_by_id(staging_file_id, None, true)
-        .await?;
+        .await;
+
     let staging_file = match staging_file {
-        Some(staging_file) => staging_file,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(staging_file)) => staging_file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::staging_file::controllers", controller = "remove_staging_file", service = "StagingFileService", staging_file_id:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
         }
     };
 
@@ -89,41 +72,49 @@ async fn remove_staging_file(
 
 #[get("/<staging_file_id>")]
 async fn get_staging_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     staging_file_service: &State<Arc<StagingFileService>>,
     staging_file_id: Uuid,
-) -> Result<(Status, Json<StagingFile>), Error> {
+) -> JsonRes<StagingFile> {
     let staging_file = staging_file_service
         .get_staging_file_by_id(staging_file_id)
-        .await?;
+        .await;
+
     let staging_file = match staging_file {
-        Some(staging_file) => staging_file,
-        None => {
-            return Err(Error::not_found_error());
+        Ok(Some(staging_file)) => staging_file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::staging_file::controllers", controller = "get_staging_file", service = "StagingFileService", staging_file_id:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
         }
     };
 
     Ok((Status::Ok, Json(staging_file)))
 }
 
-#[put("/<staging_file_id>", data = "<data>")]
+#[put("/<staging_file_id>", data = "<body>")]
 async fn fill_staging_file(
-    #[allow(unused_variables)] user_session: AuthUserSession<'_>,
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
     app_config: &State<AppConfig>,
     staging_file_service: &State<Arc<StagingFileService>>,
     staging_file_id: Uuid,
-    data: Data<'_>,
-) -> Result<(Status, Json<StagingFile>), Error> {
-    let stream = data.open(app_config.limits.file);
+    body: Data<'_>,
+) -> JsonRes<StagingFile> {
+    let stream = body.open(app_config.limits.file);
     let staging_file = staging_file_service
         .fill_staging_file_by_id(staging_file_id, None, stream)
-        .await?;
+        .await;
 
     let staging_file = match staging_file {
-        Ok(staging_file) => staging_file,
-        Err(err) => match err {
+        Ok(Ok(Some(staging_file))) => staging_file,
+        Ok(Ok(None)) => {
+            return Err(Status::NotFound.into());
+        }
+        Ok(Err(err)) => match err {
             WriteError::OffsetExceedsFileSize { offset, file_size } => {
-                return Err(Error::error(
+                return Err(Error::new_dynamic(
                     Status::UnprocessableEntity,
                     format!(
                         "the offset `{}` exceeds the file size `{}`",
@@ -131,14 +122,18 @@ async fn fill_staging_file(
                     ),
                 ));
             }
-            WriteError::WriteError { .. } => {
-                return Err(Error::internal_server_error());
+            WriteError::WriteError {
+                io_error,
+                file_size,
+            } => {
+                log::error!(target: "routes::staging_file::controllers", controller = "fill_staging_file", service = "StagingFileService", staging_file_id:serde, io_error:err, file_size; "Error returned from service.");
+                return Err(Status::InternalServerError.into());
             }
             WriteError::FileTooLarge {
                 max_size,
                 file_size,
             } => {
-                return Err(Error::error(
+                return Err(Error::new_dynamic(
                     Status::UnprocessableEntity,
                     format!(
                         "the file size `{}` exceeds the maximum file size `{}`",
@@ -147,7 +142,7 @@ async fn fill_staging_file(
                 ));
             }
             WriteError::OffsetTooLarge { max_offset, offset } => {
-                return Err(Error::error(
+                return Err(Error::new_dynamic(
                     Status::UnprocessableEntity,
                     format!(
                         "the offset `{}` exceeds the maximum offset `{}`",
@@ -156,11 +151,9 @@ async fn fill_staging_file(
                 ));
             }
         },
-    };
-    let staging_file = match staging_file {
-        Some(staging_file) => staging_file,
-        None => {
-            return Err(Error::not_found_error());
+        Err(err) => {
+            log::error!(target: "routes::staging_file::controllers", controller = "fill_staging_file", service = "StagingFileService", staging_file_id:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
         }
     };
 
