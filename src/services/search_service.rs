@@ -26,7 +26,7 @@ impl SearchService {
         let meilisearch_url: &str = meilisearch_url.trim_end_matches('/');
         let meilisearch_index_prefix = match meilisearch_index_prefix {
             Some(prefix) => format!("{}_", prefix.to_ascii_lowercase()),
-            None => format!(""),
+            None => String::new(),
         };
         let client = Client::new(meilisearch_url, meilisearch_master_key);
 
@@ -69,16 +69,13 @@ impl SearchService {
                     }
                 };
 
-                let index = task.try_make_index(&client);
-                let index = match index {
+                match task.try_make_index(&client) {
                     Ok(index) => index,
                     Err(_) => {
                         log::error!(target: "search_service", collections_index_name; "Failed to get index. Aborting.");
                         return Err(SearchServiceError::IndexInTaskNotFound);
                     }
-                };
-
-                index
+                }
             }
         };
 
@@ -107,16 +104,13 @@ impl SearchService {
                     }
                 };
 
-                let index = task.try_make_index(&client);
-                let index = match index {
+                match task.try_make_index(&client) {
                     Ok(index) => index,
                     Err(_) => {
                         log::error!(target: "search_service", files_index_name; "Failed to get index. Aborting.");
                         return Err(SearchServiceError::IndexInTaskNotFound);
                     }
-                };
-
-                index
+                }
             }
         };
 

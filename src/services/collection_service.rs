@@ -9,9 +9,9 @@ use uuid::Uuid;
 #[derive(Error, Debug)]
 pub enum CollectionServiceError {
     #[error("database pool error: {0}")]
-    PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
+    Pool(#[from] diesel_async::pooled_connection::deadpool::PoolError),
     #[error("diesel error: {0}")]
-    DieselError(#[from] diesel::result::Error),
+    Diesel(#[from] diesel::result::Error),
 }
 
 pub struct CollectionService {

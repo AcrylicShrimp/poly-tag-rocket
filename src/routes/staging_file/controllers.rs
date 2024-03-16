@@ -122,13 +122,6 @@ async fn fill_staging_file(
                     ),
                 ));
             }
-            WriteError::WriteError {
-                io_error,
-                file_size,
-            } => {
-                log::error!(target: "routes::staging_file::controllers", controller = "fill_staging_file", service = "StagingFileService", staging_file_id:serde, io_error:err, file_size; "Error returned from service.");
-                return Err(Status::InternalServerError.into());
-            }
             WriteError::FileTooLarge {
                 max_size,
                 file_size,
@@ -149,6 +142,13 @@ async fn fill_staging_file(
                         offset, max_offset
                     ),
                 ));
+            }
+            WriteError::Write {
+                io_error,
+                file_size,
+            } => {
+                log::error!(target: "routes::staging_file::controllers", controller = "fill_staging_file", service = "StagingFileService", staging_file_id:serde, io_error:err, file_size; "Error returned from service.");
+                return Err(Status::InternalServerError.into());
             }
         },
         Err(err) => {

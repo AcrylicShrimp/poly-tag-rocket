@@ -1,5 +1,3 @@
-#![allow(clippy::let_and_return)]
-
 mod config;
 mod db;
 mod dto;
@@ -287,14 +285,8 @@ pub async fn setup_rocket_instance(
 
     let search_service = SearchService::new(
         &app_config.meilisearch_url,
-        app_config
-            .meilisearch_master_key
-            .as_ref()
-            .map(|key| key.as_str()),
-        app_config
-            .meilisearch_index_prefix
-            .as_ref()
-            .map(|prefix| prefix.as_str()),
+        app_config.meilisearch_master_key.as_deref(),
+        app_config.meilisearch_index_prefix.as_deref(),
     )
     .await?;
 

@@ -16,19 +16,19 @@ use uuid::Uuid;
 #[derive(Error, Debug)]
 pub enum FileServiceError {
     #[error("database pool error: {0}")]
-    PoolError(#[from] diesel_async::pooled_connection::deadpool::PoolError),
+    Pool(#[from] diesel_async::pooled_connection::deadpool::PoolError),
     #[error("diesel error: {0}")]
-    DieselError(#[from] diesel::result::Error),
+    Diesel(#[from] diesel::result::Error),
     #[error("staging file service error: {0}")]
-    StagingFileServiceError(#[from] StagingFileServiceError),
+    StagingFileService(#[from] StagingFileServiceError),
     #[error("file is not yet filled; upload it first")]
     FileNotYetFilled,
     #[error("io error: {0}")]
-    IOError(#[from] std::io::Error),
+    IO(#[from] std::io::Error),
     #[error("compute file mime error: {0}")]
-    ComputeMimeError(#[from] compute_file_mime::ComputeFileMimeError),
+    ComputeMime(#[from] compute_file_mime::ComputeFileMimeError),
     #[error("compute file hash error: {0}")]
-    ComputeHashError(#[from] compute_file_hash::ComputeFileHashError),
+    ComputeHash(#[from] compute_file_hash::ComputeFileHashError),
 }
 
 pub struct FileService {
@@ -86,7 +86,7 @@ impl FileService {
 
                 let compute_mime = || async {
                     match &staging_file.mime {
-                        Some(mime) => Ok(Some(mime.as_str())),
+                        Some(mime) => Ok(mime.as_str()),
                         None => compute_file_mime::compute_file_mime(&file_path)
                             .await
                             .map_err(FileServiceError::from),
@@ -100,7 +100,6 @@ impl FileService {
 
                 let size = tokio::fs::metadata(&file_path).await?.len();
                 let (mime, hash) = tokio::try_join!(compute_mime(), compute_hash())?;
-                let mime = mime.unwrap_or("application/octet-stream");
 
                 let file = diesel::insert_into(schema::files::table)
                     .values(CreatingFile {

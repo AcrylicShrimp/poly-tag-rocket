@@ -123,7 +123,7 @@ impl FileDriver for LocalFileSystem {
         mut stream: DataStream<'_>,
     ) -> Result<i64, WriteError> {
         fn make_write_error(io_error: std::io::Error, file_size: u64) -> WriteError {
-            WriteError::WriteError {
+            WriteError::Write {
                 io_error,
                 file_size,
             }
@@ -134,6 +134,7 @@ impl FileDriver for LocalFileSystem {
         let file = OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&path)
             .await;
         let mut file = match file {
@@ -160,7 +161,7 @@ impl FileDriver for LocalFileSystem {
             });
         }
 
-        if initial_file_size < offset as u64 {
+        if initial_file_size < offset {
             return Err(WriteError::OffsetExceedsFileSize {
                 offset,
                 file_size: initial_file_size,

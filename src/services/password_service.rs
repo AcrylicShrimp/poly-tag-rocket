@@ -33,7 +33,7 @@ impl PasswordService {
     pub fn generate_secure_token_252(&self) -> String {
         let mut buf = [0u8; 189];
         OsRng.fill_bytes(&mut buf);
-        BASE64_STANDARD.encode(&buf)
+        BASE64_STANDARD.encode(buf)
     }
 
     pub fn hash_password(&self, password: &str) -> Result<String, PasswordServiceError> {

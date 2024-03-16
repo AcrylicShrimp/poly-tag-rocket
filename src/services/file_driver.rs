@@ -12,12 +12,6 @@ pub enum WriteError {
     /// The offset exceeds the file size.
     #[error("offset exceeds file size: {file_size} < {offset}")]
     OffsetExceedsFileSize { offset: u64, file_size: u64 },
-    /// An I/O error occurred while writing the file.
-    #[error("IO error: {io_error}")]
-    WriteError {
-        io_error: std::io::Error,
-        file_size: u64,
-    },
     /// The file size is larger than the maximum allowed value.
     /// This error will be emitted if the blow condition is met:
     ///
@@ -30,6 +24,12 @@ pub enum WriteError {
     /// `i64::MAX` < `offset` + `file_size`
     #[error("offset is larger than the maximum allowed value: {max_offset} < {offset}")]
     OffsetTooLarge { max_offset: u64, offset: u64 },
+    /// An I/O error occurred while writing the file.
+    #[error("IO error: {io_error}")]
+    Write {
+        io_error: std::io::Error,
+        file_size: u64,
+    },
 }
 
 #[async_trait]

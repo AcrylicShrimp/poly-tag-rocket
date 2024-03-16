@@ -5,8 +5,7 @@ fn get_git_commit_hash() -> String {
         .args(["rev-parse", "HEAD"])
         .output()
         .unwrap();
-    let git_hash = String::from_utf8(output.stdout).unwrap();
-    git_hash
+    String::from_utf8(output.stdout).unwrap()
 }
 
 fn get_git_commit_date() -> String {
@@ -14,8 +13,7 @@ fn get_git_commit_date() -> String {
         .args(["show", "-s", "--format=%cd", "--date=short", "HEAD"])
         .output()
         .unwrap();
-    let git_date = String::from_utf8(output.stdout).unwrap();
-    git_date
+    String::from_utf8(output.stdout).unwrap()
 }
 
 fn main() {

@@ -4,28 +4,25 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum ComputeFileMimeError {
     #[error("failed to infer mime: {0}")]
-    InferError(IOError),
+    Infer(IOError),
     #[error("failed to join task: {0}")]
-    JoinError(#[from] tokio::task::JoinError),
+    Join(#[from] tokio::task::JoinError),
 }
 
 pub async fn compute_file_mime(
     path: impl Into<PathBuf>,
-) -> Result<Option<&'static str>, ComputeFileMimeError> {
+) -> Result<&'static str, ComputeFileMimeError> {
     let path = path.into();
 
     tokio::task::spawn_blocking(move || {
-        let mime =
-            infer::get_from_path(&path).map_err(|err| ComputeFileMimeError::InferError(err))?;
+        let mime = infer::get_from_path(&path).map_err(ComputeFileMimeError::Infer)?;
 
-        match mime {
-            Some(mime) => return Ok(Some(mime.mime_type())),
-            None => Ok(Some(
-                mime_guess::from_path(&path)
-                    .first_raw()
-                    .unwrap_or_else(|| "application/octet-stream"),
-            )),
-        }
+        let mime = mime
+            .map(|mime| mime.mime_type())
+            .or_else(|| mime_guess::from_path(&path).first_raw())
+            .unwrap_or("application/octet-stream");
+
+        Ok(mime)
     })
     .await?
 }
