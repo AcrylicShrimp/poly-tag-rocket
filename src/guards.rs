@@ -125,7 +125,7 @@ impl<'r> FromRequest<'r> for RangeHeader {
         }
 
         let range = range.strip_prefix("bytes").unwrap_or(range).trim();
-        let range = range.strip_prefix("=").unwrap_or(range).trim();
+        let range = range.strip_prefix('=').unwrap_or(range).trim();
 
         // ignore multiple ranges
         let range = match range.split_once(',') {
@@ -191,7 +191,7 @@ impl<'r> FromRequest<'r> for RangeHeader {
                     ));
                 }
             }
-            _ if range.ends_with("-") => {
+            _ if range.ends_with('-') => {
                 // pattern: start-
                 // start must be non-negative integer
                 if start < 0 {
