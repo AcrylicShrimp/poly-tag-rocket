@@ -23,7 +23,7 @@ struct IndexingFile<'a> {
     pub mime_subtype_part: Option<&'a str>,
     pub size: i64,
     pub hash: i64,
-    pub uploaded_at: u64,
+    pub uploaded_at: i64,
 }
 
 impl<'a> IndexingFile<'a> {
@@ -33,7 +33,7 @@ impl<'a> IndexingFile<'a> {
             None => (file.mime.as_str(), None),
         };
 
-        let uploaded_at = file.uploaded_at.and_utc().timestamp_micros() as u64;
+        let uploaded_at = file.uploaded_at.and_utc().timestamp_micros();
 
         Self {
             id: file.id,
@@ -55,12 +55,12 @@ struct IndexedFile {
     pub mime_full: String,
     pub size: i64,
     pub hash: i64,
-    pub uploaded_at: u64,
+    pub uploaded_at: i64,
 }
 
 impl IndexedFile {
     pub fn into_file(self) -> File {
-        let uploaded_at = DateTime::from_timestamp_micros(self.uploaded_at as i64).unwrap();
+        let uploaded_at = DateTime::from_timestamp_micros(self.uploaded_at).unwrap();
         let uploaded_at = uploaded_at.naive_utc();
 
         File {
