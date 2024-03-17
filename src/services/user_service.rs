@@ -129,6 +129,29 @@ impl UserService {
         Ok(user)
     }
 
+    /// Retrieves a user by their email.
+    pub async fn get_user_by_email(
+        &self,
+        user_email: &str,
+    ) -> Result<Option<User>, UserServiceError> {
+        use crate::db::schema;
+
+        let db = &mut self.db_pool.get().await?;
+        let user = schema::users::dsl::users
+            .filter(schema::users::email.eq(user_email))
+            .select((
+                schema::users::id,
+                schema::users::username,
+                schema::users::email,
+                schema::users::joined_at,
+            ))
+            .first::<User>(db)
+            .await
+            .optional()?;
+
+        Ok(user)
+    }
+
     /// Updates a user's email by their ID.
     /// Returns the updated user, or `None` if the user was not found.
     pub async fn set_user_username_by_id(
