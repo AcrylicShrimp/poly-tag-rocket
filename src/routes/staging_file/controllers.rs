@@ -1,4 +1,4 @@
-use super::dto::CreatingStagingFile;
+use super::dto::{CreatingStagingFile, UpdatingStagingFile};
 use crate::{
     config::AppConfig,
     db::models::StagingFile,
@@ -19,6 +19,7 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
             create_staging_file,
             remove_staging_file,
             get_staging_file,
+            update_staging_file,
             fill_staging_file_data
         ],
     )
@@ -87,6 +88,31 @@ async fn get_staging_file(
         }
         Err(err) => {
             log::error!(target: "routes::staging_file::controllers", controller = "get_staging_file", service = "StagingFileService", staging_file_id:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((Status::Ok, Json(staging_file)))
+}
+
+#[put("/<staging_file_id>", data = "<body>")]
+async fn update_staging_file(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    staging_file_service: &State<Arc<StagingFileService>>,
+    staging_file_id: Uuid,
+    body: Json<UpdatingStagingFile<'_>>,
+) -> JsonRes<StagingFile> {
+    let staging_file = staging_file_service
+        .update_staging_file_by_id(staging_file_id, body.name, body.mime)
+        .await;
+
+    let staging_file = match staging_file {
+        Ok(Some(staging_file)) => staging_file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::staging_file::controllers", controller = "update_staging_file", service = "StagingFileService", staging_file_id:serde, err:err; "Error returned from service.");
             return Err(Status::InternalServerError.into());
         }
     };

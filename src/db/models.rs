@@ -125,3 +125,11 @@ pub struct CreatingStagingFile<'a> {
     pub mime: Option<&'a str>,
     pub size: i64,
 }
+
+#[derive(Serialize, Deserialize, AsChangeset, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::staging_files)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct UpdatingStagingFile<'a> {
+    pub name: &'a str,
+    pub mime: Option<&'a str>,
+}

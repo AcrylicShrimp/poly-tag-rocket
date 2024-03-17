@@ -1,5 +1,5 @@
 use super::{FileDriver, WriteError};
-use crate::db::models::{CreatingStagingFile, StagingFile};
+use crate::db::models::{CreatingStagingFile, StagingFile, UpdatingStagingFile};
 use chrono::{Duration, Utc};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
@@ -206,6 +206,39 @@ impl StagingFileService {
             .get_result::<StagingFile>(db)
             .await
             .optional()?;
+
+        Ok(staging_file)
+    }
+
+    /// Updates a staging file by its ID.
+    /// Returns the staging file that was updated, or `None` if no staging file was found.
+    pub async fn update_staging_file_by_id(
+        &self,
+        staging_file_id: Uuid,
+        new_name: &str,
+        new_mime: Option<&str>,
+    ) -> Result<Option<StagingFile>, StagingFileServiceError> {
+        use crate::db::schema;
+
+        let db = &mut self.db_pool.get().await?;
+        let staging_file = diesel::update(
+            schema::staging_files::dsl::staging_files
+                .filter(schema::staging_files::id.eq(staging_file_id)),
+        )
+        .set(UpdatingStagingFile {
+            name: new_name,
+            mime: new_mime,
+        })
+        .returning((
+            schema::staging_files::id,
+            schema::staging_files::name,
+            schema::staging_files::mime,
+            schema::staging_files::size,
+            schema::staging_files::staged_at,
+        ))
+        .get_result::<StagingFile>(db)
+        .await
+        .optional()?;
 
         Ok(staging_file)
     }

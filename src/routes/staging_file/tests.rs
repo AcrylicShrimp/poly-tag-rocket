@@ -1,4 +1,4 @@
-use super::dto::CreatingStagingFile;
+use super::dto::{CreatingStagingFile, UpdatingStagingFile};
 use crate::{
     db::models::StagingFile,
     services::{AuthService, StagingFileService, UserService},
@@ -136,6 +136,59 @@ async fn test_get_staging_file() {
         .unwrap();
 
     assert_eq!(raw_retrieved_staging_file, retrieved_staging_file);
+}
+
+#[rocket::async_test]
+async fn test_update_staging_file() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let staging_file = staging_file_service
+        .create_staging_file("staging_file", Some("video/mp4"))
+        .await
+        .unwrap();
+
+    let new_name = "new_staging_file";
+    let new_mime = Some("image/png");
+
+    let response = client
+        .put(format!("/staging-files/{}", staging_file.id))
+        .header(Accept::JSON)
+        .header(ContentType::JSON)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(
+            serde_json::to_string(&UpdatingStagingFile {
+                name: new_name,
+                mime: new_mime,
+            })
+            .unwrap(),
+        )
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let updated_staging_file = response.into_json::<StagingFile>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(updated_staging_file.name, new_name);
+    assert_eq!(updated_staging_file.mime.as_deref(), new_mime);
+
+    let raw_updated_staging_file = staging_file_service
+        .get_staging_file_by_id(updated_staging_file.id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_updated_staging_file, updated_staging_file);
 }
 
 #[rocket::async_test]
