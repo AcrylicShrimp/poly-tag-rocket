@@ -62,6 +62,7 @@ pub mod helpers {
                 &format!("{}_user_pw", id),
             )
             .await
+            .unwrap()
             .unwrap();
         user
     }

@@ -2,6 +2,7 @@ use rocket::{http::Status, serde::json::Json, Responder};
 use serde::Serialize;
 
 #[derive(Responder, Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[serde(untagged)]
 pub enum ErrorBodyKind {
     Static(&'static str),
     Dynamic(String),

@@ -32,12 +32,13 @@ impl UserService {
     }
 
     /// Creates a new user. Their password will be hashed before being stored in the database.
+    /// Returns the created user, or `None` if the user with the same email already exists.
     pub async fn create_user(
         &self,
         username: &str,
         email: &str,
         password: &str,
-    ) -> Result<User, UserServiceError> {
+    ) -> Result<Option<User>, UserServiceError> {
         use crate::db::schema;
 
         let password_hash = self.password_service.hash_password(password)?;
@@ -56,7 +57,16 @@ impl UserService {
                 schema::users::joined_at,
             ))
             .get_result::<User>(db)
-            .await?;
+            .await;
+
+        let user = match user {
+            Ok(user) => Some(user),
+            Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                err,
+            )) if err.constraint_name() == Some("users_email_idx") => None,
+            Err(err) => return Err(err.into()),
+        };
 
         Ok(user)
     }

@@ -30,7 +30,10 @@ async fn create_user(
         .await;
 
     let user = match user {
-        Ok(user) => user,
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            return Err(Status::Conflict.into());
+        }
         Err(err) => {
             let body = body.into_inner();
             log::error!(target: "routes::user::controllers", controller = "create_user", service = "UserService", body:serde, err:err; "Error returned from service.");
