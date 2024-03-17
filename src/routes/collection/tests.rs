@@ -240,13 +240,7 @@ async fn test_update_collection() {
 
     assert_eq!(status, Status::Ok);
     assert_eq!(updated_collection.name, new_name);
-    assert_eq!(
-        updated_collection
-            .description
-            .as_ref()
-            .map(|description| description.as_str()),
-        new_description
-    );
+    assert_eq!(updated_collection.description.as_deref(), new_description);
 
     let raw_updated_collection = collection_service
         .get_collection_by_id(updated_collection.id)
