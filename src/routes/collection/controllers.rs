@@ -1,6 +1,12 @@
-use super::dto::{CollectionList, CreatingCollection, UpdatingCollection};
+use super::dto::{
+    CollectionList, CollectionSearchResult, CreatingCollection, SearchingCollection,
+    UpdatingCollection,
+};
 use crate::{
-    db::models::Collection, dto::JsonRes, guards::AuthUserSession, services::CollectionService,
+    db::models::Collection,
+    dto::JsonRes,
+    guards::AuthUserSession,
+    services::{CollectionService, SearchService},
 };
 use rocket::{
     delete, get, http::Status, post, put, routes, serde::json::Json, Build, Rocket, State,
@@ -14,6 +20,7 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
         routes![
             create_collection,
             remove_collection,
+            search_collections,
             get_collections,
             get_collection,
             update_collection
@@ -65,6 +72,26 @@ async fn remove_collection(
     };
 
     Ok((Status::Ok, Json(collection)))
+}
+
+#[post("/search", data = "<body>")]
+async fn search_collections(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    search_service: &State<Arc<SearchService>>,
+    body: Json<SearchingCollection<'_>>,
+) -> JsonRes<CollectionSearchResult> {
+    let collections = search_service.search_collections(body.query).await;
+
+    let collections = match collections {
+        Ok(collections) => collections,
+        Err(err) => {
+            let body = body.into_inner();
+            log::error!(target: "routes::collection::controllers", controller = "search_collections", service = "SearchService", body:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((Status::Ok, Json(CollectionSearchResult { collections })))
 }
 
 #[get("/?<last_collection_id>&<limit>")]

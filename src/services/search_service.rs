@@ -1,5 +1,7 @@
-use crate::db::models::Collection;
-use meilisearch_sdk::{Client, Index};
+use crate::db::models::{Collection, File};
+use chrono::{DateTime, NaiveDateTime};
+use meilisearch_sdk::{Client, Index, Selectors};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use uuid::Uuid;
@@ -10,6 +12,66 @@ pub enum SearchServiceError {
     MeiliSearchError(#[from] meilisearch_sdk::errors::Error),
     #[error("index not found in task")]
     IndexInTaskNotFound,
+}
+
+#[derive(Serialize)]
+struct IndexingFile<'a> {
+    pub id: Uuid,
+    pub name: &'a str,
+    pub mime_full: &'a str,
+    pub mime_type_part: &'a str,
+    pub mime_subtype_part: Option<&'a str>,
+    pub size: i64,
+    pub hash: i64,
+    pub uploaded_at: u64,
+}
+
+impl<'a> IndexingFile<'a> {
+    pub fn from_file(file: &'a File) -> Self {
+        let (mime_type_part, mime_subtype_part) = match file.mime.trim().split_once('/') {
+            Some((type_part, subtype_part)) => (type_part, Some(subtype_part)),
+            None => (file.mime.as_str(), None),
+        };
+
+        let uploaded_at = file.uploaded_at.and_utc().timestamp_micros() as u64;
+
+        Self {
+            id: file.id,
+            name: &file.name,
+            mime_full: &file.mime,
+            mime_type_part: mime_type_part,
+            mime_subtype_part: mime_subtype_part,
+            size: file.size,
+            hash: file.hash,
+            uploaded_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct IndexedFile {
+    pub id: Uuid,
+    pub name: String,
+    pub mime_full: String,
+    pub size: i64,
+    pub hash: i64,
+    pub uploaded_at: u64,
+}
+
+impl IndexedFile {
+    pub fn into_file(self) -> File {
+        let uploaded_at = DateTime::from_timestamp_micros(self.uploaded_at as i64).unwrap();
+        let uploaded_at = uploaded_at.naive_utc();
+
+        File {
+            id: self.id,
+            name: self.name,
+            mime: self.mime_full,
+            size: self.size,
+            hash: self.hash,
+            uploaded_at,
+        }
+    }
 }
 
 pub struct SearchService {
@@ -69,13 +131,28 @@ impl SearchService {
                     }
                 };
 
-                match task.try_make_index(&client) {
+                let index = match task.try_make_index(&client) {
                     Ok(index) => index,
                     Err(_) => {
                         log::error!(target: "search_service", collections_index_name; "Failed to get index. Aborting.");
                         return Err(SearchServiceError::IndexInTaskNotFound);
                     }
+                };
+
+                if let Err(err) = index
+                    .set_searchable_attributes(["name", "description"])
+                    .await
+                {
+                    // failing to set searchable attributes is not a critical error
+                    log::warn!(target: "search_service", collections_index_name, err:err; "Failed to set searchable attributes.");
                 }
+
+                if let Err(err) = index.set_filterable_attributes(["created_at"]).await {
+                    // failing to set searchable attributes is not a critical error
+                    log::warn!(target: "search_service", collections_index_name, err:err; "Failed to set searchable attributes.");
+                }
+
+                index
             }
         };
 
@@ -104,13 +181,35 @@ impl SearchService {
                     }
                 };
 
-                match task.try_make_index(&client) {
+                let index = match task.try_make_index(&client) {
                     Ok(index) => index,
                     Err(_) => {
                         log::error!(target: "search_service", files_index_name; "Failed to get index. Aborting.");
                         return Err(SearchServiceError::IndexInTaskNotFound);
                     }
+                };
+
+                if let Err(err) = index.set_searchable_attributes(["name"]).await {
+                    // failing to set searchable attributes is not a critical error
+                    log::warn!(target: "search_service", files_index_name, err:err; "Failed to set searchable attributes.");
                 }
+
+                if let Err(err) = index
+                    .set_filterable_attributes([
+                        "mime_full",
+                        "mime_type_part",
+                        "mime_subtype_part",
+                        "size",
+                        "hash",
+                        "uploaded_at",
+                    ])
+                    .await
+                {
+                    // failing to set filterable attributes is not a critical error
+                    log::warn!(target: "search_service", files_index_name, err:err; "Failed to set filterable attributes.");
+                }
+
+                index
             }
         };
 
@@ -154,13 +253,34 @@ impl SearchService {
         Ok(())
     }
 
+    /// Searches collections.
+    pub async fn search_collections(&self, q: &str) -> Result<Vec<Collection>, SearchServiceError> {
+        let query = self.collections_index.search().with_query(q).build();
+
+        let result = query.execute::<Collection>().await;
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                let index_uid = &self.collections_index.uid;
+                log::error!(target: "search_service", index_uid, q, err:err; "Failed to search collections.");
+                return Err(err.into());
+            }
+        };
+
+        let hits = result.hits.into_iter().map(|hit| hit.result).collect();
+
+        Ok(hits)
+    }
+
     /// Indexes a file.
     /// It will overwrite the previous with the same ID.
-    pub async fn index_file(
-        &self,
-        file: &crate::db::models::File,
-    ) -> Result<(), SearchServiceError> {
-        let result = self.files_index.add_or_replace(&[file], Some("id")).await;
+    pub async fn index_file(&self, file: &File) -> Result<(), SearchServiceError> {
+        let indexing_file = IndexingFile::from_file(file);
+
+        let result = self
+            .files_index
+            .add_or_replace(&[indexing_file], Some("id"))
+            .await;
 
         if let Err(err) = result {
             let index_uid = &self.files_index.uid;
@@ -180,6 +300,78 @@ impl SearchService {
         }
 
         Ok(())
+    }
+
+    /// Searches files.
+    pub async fn search_files(
+        &self,
+        q: &str,
+        filter_mime: Option<&str>,
+        filter_size: Option<(u32, u32)>,
+        filter_hash: Option<u32>,
+        filter_uploaded_at: Option<(NaiveDateTime, NaiveDateTime)>,
+    ) -> Result<Vec<File>, SearchServiceError> {
+        let mut array_filter = Vec::with_capacity(4);
+
+        if let Some(filter_mime) = filter_mime {
+            array_filter.push(format!(
+                "mime_full = \"{}\" OR mime_type_part = \"{}\" OR mime_subtype_part = \"{}\"",
+                filter_mime, filter_mime, filter_mime
+            ));
+        }
+
+        if let Some(filter_size) = filter_size {
+            array_filter.push(format!("size {} TO {}", filter_size.0, filter_size.1));
+        }
+
+        if let Some(filter_hash) = filter_hash {
+            array_filter.push(format!("hash = {}", filter_hash));
+        }
+
+        if let Some(filter_uploaded_at) = filter_uploaded_at {
+            let start_timestamp = filter_uploaded_at.0.and_utc().timestamp();
+            let end_timestamp = filter_uploaded_at.1.and_utc().timestamp();
+
+            array_filter.push(format!(
+                "uploaded_at {} TO {}",
+                start_timestamp, end_timestamp
+            ));
+        }
+
+        let array_filter = array_filter.iter().map(|s| s.as_str()).collect();
+
+        let query = self
+            .collections_index
+            .search()
+            .with_query(q)
+            .with_array_filter(array_filter)
+            .with_attributes_to_retrieve(Selectors::Some(&[
+                "id",
+                "name",
+                "mime_full",
+                "size",
+                "hash",
+                "uploaded_at",
+            ]))
+            .build();
+
+        let result = query.execute::<IndexedFile>().await;
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                let index_uid = &self.collections_index.uid;
+                log::error!(target: "search_service", index_uid, q, err:err; "Failed to search collections.");
+                return Err(err.into());
+            }
+        };
+
+        let hits = result
+            .hits
+            .into_iter()
+            .map(|hit| hit.result.into_file())
+            .collect();
+
+        Ok(hits)
     }
 }
 

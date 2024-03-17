@@ -1,9 +1,9 @@
-use super::dto::FileData;
+use super::dto::{FileData, FileSearchResult, SearchingFile};
 use crate::{
     db::models::File,
     dto::{Error, JsonRes},
     guards::{AuthUserSession, RangeHeader},
-    services::{FileService, FileServiceError, ReadError, ReadRange},
+    services::{FileService, FileServiceError, ReadError, ReadRange, SearchService},
 };
 use rocket::{
     delete, get,
@@ -18,7 +18,13 @@ use uuid::Uuid;
 pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
     rocket.mount(
         "/files",
-        routes![create_file, remove_file, get_file, get_file_data],
+        routes![
+            create_file,
+            remove_file,
+            search_files,
+            get_file,
+            get_file_data
+        ],
     )
 }
 
@@ -80,6 +86,34 @@ async fn remove_file(
     };
 
     Ok((Status::Ok, Json(file)))
+}
+
+#[post("/search", data = "<body>")]
+async fn search_files(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    search_service: &State<Arc<SearchService>>,
+    body: Json<SearchingFile<'_>>,
+) -> JsonRes<FileSearchResult> {
+    let files = search_service
+        .search_files(
+            body.query,
+            body.filter_mime,
+            body.filter_size,
+            body.filter_hash,
+            body.filter_uploaded_at,
+        )
+        .await;
+
+    let files = match files {
+        Ok(files) => files,
+        Err(err) => {
+            let body = body.into_inner();
+            log::error!(target: "routes::file::controllers", controller = "search_files", service = "SearchService", body:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((Status::Ok, Json(FileSearchResult { files })))
 }
 
 #[get("/<file_id>")]

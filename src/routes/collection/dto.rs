@@ -9,9 +9,19 @@ pub struct CreatingCollection<'a> {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct SearchingCollection<'a> {
+    pub query: &'a str,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct UpdatingCollection<'a> {
     pub name: &'a str,
     pub description: Option<&'a str>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CollectionSearchResult {
+    pub collections: Vec<Collection>,
 }
 
 #[derive(Serialize, Deserialize)]

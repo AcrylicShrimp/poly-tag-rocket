@@ -1,3 +1,5 @@
+use crate::db::models::File;
+use chrono::NaiveDateTime;
 use rocket::{
     http::{Header, Status},
     response::{stream::ReaderStream, Responder, Result},
@@ -11,6 +13,20 @@ use tokio::io::AsyncRead;
 pub struct CreatingFile<'a> {
     pub name: &'a str,
     pub mime: Option<&'a str>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SearchingFile<'a> {
+    pub query: &'a str,
+    pub filter_mime: Option<&'a str>,
+    pub filter_size: Option<(u32, u32)>,
+    pub filter_hash: Option<u32>,
+    pub filter_uploaded_at: Option<(NaiveDateTime, NaiveDateTime)>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FileSearchResult {
+    pub files: Vec<File>,
 }
 
 pub struct FileData {
