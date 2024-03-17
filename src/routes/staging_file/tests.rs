@@ -157,7 +157,7 @@ async fn test_fill_staging_file() {
     let file_content = "file content";
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(ContentType::Binary)
         .header(Header::new(
@@ -204,7 +204,7 @@ async fn test_fill_staging_file_with_offset() {
     let file_content = "file content";
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(ContentType::Binary)
         .header(Header::new(
@@ -236,7 +236,7 @@ async fn test_fill_staging_file_with_offset() {
     let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(Header::new("Offset", offset.to_string()))
         .header(ContentType::Binary)
@@ -284,7 +284,7 @@ async fn test_fill_staging_file_with_offset_min() {
     let file_content = "file content";
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(ContentType::Binary)
         .header(Header::new(
@@ -316,7 +316,7 @@ async fn test_fill_staging_file_with_offset_min() {
     let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(Header::new("Offset", offset.to_string()))
         .header(ContentType::Binary)
@@ -364,7 +364,7 @@ async fn test_fill_staging_file_with_offset_max() {
     let file_content = "file content";
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(ContentType::Binary)
         .header(Header::new(
@@ -396,7 +396,7 @@ async fn test_fill_staging_file_with_offset_max() {
     let file_content = format!("{}{}", &file_content[..offset], extra_file_content);
 
     let response = client
-        .put(format!("/staging-files/{}", staging_file.id))
+        .put(format!("/staging-files/{}/data", staging_file.id))
         .header(Accept::JSON)
         .header(Header::new("Offset", offset.to_string()))
         .header(ContentType::Binary)

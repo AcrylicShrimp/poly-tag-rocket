@@ -95,7 +95,7 @@ pub mod helpers {
         let file_content = file_content.as_ref();
 
         let response = client
-            .put(format!("/staging-files/{}", staging_file.id))
+            .put(format!("/staging-files/{}/data", staging_file.id))
             .header(Accept::JSON)
             .header(ContentType::Binary)
             .header(Header::new(

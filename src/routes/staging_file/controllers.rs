@@ -19,7 +19,7 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
             create_staging_file,
             remove_staging_file,
             get_staging_file,
-            fill_staging_file
+            fill_staging_file_data
         ],
     )
 }
@@ -94,8 +94,8 @@ async fn get_staging_file(
     Ok((Status::Ok, Json(staging_file)))
 }
 
-#[put("/<staging_file_id>", data = "<body>")]
-async fn fill_staging_file(
+#[put("/<staging_file_id>/data", data = "<body>")]
+async fn fill_staging_file_data(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
     app_config: &State<AppConfig>,
     staging_file_service: &State<Arc<StagingFileService>>,
