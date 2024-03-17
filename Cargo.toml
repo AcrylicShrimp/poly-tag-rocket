@@ -44,3 +44,8 @@ tokio-util = { version = "0.7", features = [
 ] }
 utoipa = { version = "4", features = ["rocket_extras", "uuid", "chrono"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "debuginfo"
