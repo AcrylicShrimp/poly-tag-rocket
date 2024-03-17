@@ -113,9 +113,6 @@ pub struct AppConfig {
     /// All indices created by the application will have this prefix.
     #[serde(default)]
     pub meilisearch_index_prefix: Option<String>,
-    /// The limits for the application.
-    #[serde(default)]
-    pub limits: AppLimit,
     /// The period to remove expired staging files.
     /// The period is in seconds.
     #[serde(default = "app_config_defaults::expired_staging_file_removal_period")]
@@ -124,6 +121,9 @@ pub struct AppConfig {
     /// The expiration is in seconds.
     #[serde(default = "app_config_defaults::expired_staging_file_expiration")]
     pub expired_staging_file_expiration: u64,
+    /// The limits for the application.
+    #[serde(default)]
+    pub limits: AppLimit,
 }
 
 mod app_config_defaults {

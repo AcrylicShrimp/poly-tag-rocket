@@ -29,6 +29,14 @@ meilisearch_master_key: "master_key"
 # All indices created by the application will have this prefix.
 meilisearch_index_prefix: "file_server"
 
+# The period to remove expired staging files.
+# The period is in seconds.
+remove_expired_staging_files_period: 3600
+
+# The expiration for staging files.
+# The expiration is in seconds.
+expired_staging_file_expiration: 86400
+
 # The limits for the application.
 limits:
   form: 32KiB
@@ -38,11 +46,3 @@ limits:
   bytes: 8KiB
   json: 1MiB
   msgpack: 1MiB
-
-# The period to remove expired staging files.
-# The period is in seconds.
-remove_expired_staging_files_period: 3600
-
-# The expiration for staging files.
-# The expiration is in seconds.
-expired_staging_file_expiration: 86400

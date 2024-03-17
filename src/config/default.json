@@ -8,6 +8,8 @@
   "meilisearch_url": "http://localhost:7700",
   "meilisearch_master_key": "master_key",
   "meilisearch_index_prefix": "file_server",
+  "expired_staging_file_removal_period": 3600,
+  "expired_staging_file_expiration": 86400,
   "limits": {
     "form": "32KiB",
     "data_form": "2MiB",
@@ -16,7 +18,5 @@
     "bytes": "8KiB",
     "json": "1MiB",
     "msgpack": "1MiB"
-  },
-  "expired_staging_file_removal_period": 3600,
-  "expired_staging_file_expiration": 86400
+  }
 }
