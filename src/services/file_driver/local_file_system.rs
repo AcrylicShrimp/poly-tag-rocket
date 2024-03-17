@@ -38,6 +38,8 @@ impl LocalFileSystem {
         let staging_path = staging_path.into();
         let resident_path = resident_path.into();
 
+        log::info!(target: "file_driver", method = "new", staging_path:?, resident_path:?; "Creating file driver.");
+
         let staging_path_exists = tokio::fs::try_exists(&staging_path).await;
         let staging_path_exists = match staging_path_exists {
             Ok(exists) => exists,
@@ -69,6 +71,26 @@ impl LocalFileSystem {
                 return Err(err);
             }
         }
+
+        let staging_path_result = tokio::fs::canonicalize(&staging_path).await;
+        let staging_path = match staging_path_result {
+            Ok(path) => path,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to canonicalize staging path.");
+                return Err(err);
+            }
+        };
+
+        let resident_path_result = tokio::fs::canonicalize(&resident_path).await;
+        let resident_path = match resident_path_result {
+            Ok(path) => path,
+            Err(err) => {
+                log::error!(target: "file_driver", method="new", staging_path:?, resident_path:?, err:err; "Failed to canonicalize resident path.");
+                return Err(err);
+            }
+        };
+
+        log::info!(target: "file_driver", method = "new", staging_path:?, resident_path:?; "Staging and resident paths are ready.");
 
         let staging_path_meta = tokio::fs::metadata(&staging_path).await;
         let staging_path_meta = match staging_path_meta {
