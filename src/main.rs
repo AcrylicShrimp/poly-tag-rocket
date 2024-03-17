@@ -228,6 +228,8 @@ fn test_config(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(), AppE
 async fn run_server(config_path: Option<impl AsRef<Path> + Clone>) -> Result<(), AppError> {
     logger::setup_logger();
 
+    log::info!(target: "init", "Launching the server.");
+
     let app_config = AppConfig::load(config_path.clone())?;
     let rocket = create_rocket_instance(&app_config)?;
 
