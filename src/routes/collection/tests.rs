@@ -1,4 +1,4 @@
-use super::dto::{CollectionList, CreatingCollection};
+use super::dto::{CollectionList, CreatingCollection, UpdatingCollection};
 use crate::{
     db::models::Collection,
     services::{AuthService, CollectionService, UserService},
@@ -226,7 +226,7 @@ async fn test_update_collection() {
             format!("Bearer {}", initial_user_session.token),
         ))
         .body(
-            serde_json::to_string(&CreatingCollection {
+            serde_json::to_string(&UpdatingCollection {
                 name: new_name,
                 description: new_description,
             })
