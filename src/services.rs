@@ -16,16 +16,32 @@ pub use search_service::*;
 pub use staging_file_service::*;
 pub use user_service::*;
 
+use crate::config::AppConfig;
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use rocket::{Build, Rocket};
 use std::sync::Arc;
 
+pub async fn register_search_service(
+    rocket: Rocket<Build>,
+    app_config: &AppConfig,
+) -> Result<Rocket<Build>, SearchServiceError> {
+    let search_service = SearchService::new(
+        &app_config.meilisearch_url,
+        app_config.meilisearch_master_key.as_deref(),
+        app_config.meilisearch_index_prefix.as_deref(),
+    )
+    .await?;
+
+    Ok(rocket.manage(search_service))
+}
+
 pub fn register_services(
     rocket: Rocket<Build>,
     db_pool: Pool<AsyncPgConnection>,
-    search_service: Arc<SearchService>,
     file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
 ) -> Rocket<Build> {
+    let search_service = rocket.state::<Arc<SearchService>>().unwrap();
+
     let password_service = PasswordService::new();
     let auth_service = AuthService::new(db_pool.clone(), password_service.clone());
     let collection_service = CollectionService::new(db_pool.clone(), search_service.clone());
@@ -33,12 +49,10 @@ pub fn register_services(
     let file_service = FileService::new(
         db_pool.clone(),
         staging_file_service.clone(),
-        search_service,
+        search_service.clone(),
         file_driver,
     );
     let user_service = UserService::new(db_pool, password_service.clone());
-
-    // search_service is not included; it should be added manually.
 
     rocket
         .manage(password_service)

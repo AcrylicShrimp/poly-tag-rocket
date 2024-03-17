@@ -10,12 +10,7 @@ mod services;
 #[cfg(test)]
 mod test;
 
-use crate::{
-    config::AppConfig,
-    fairings::staging_file_remover::StagingFileRemover,
-    services::{local_file_system::LocalFileSystem, SearchService, StagingFileService},
-};
-use chrono::Duration;
+use crate::{config::AppConfig, services::local_file_system::LocalFileSystem};
 use clap::{Arg, ArgAction, Command, ValueHint};
 use const_format::formatcp;
 use rocket::{catch, catchers, http::Status, Build, Request, Rocket};
@@ -282,30 +277,14 @@ pub async fn setup_rocket_instance(
 
     let temp_base_path = &app_config.temp_base_path;
     let file_base_path = &app_config.file_base_path;
-
-    let search_service = SearchService::new(
-        &app_config.meilisearch_url,
-        app_config.meilisearch_master_key.as_deref(),
-        app_config.meilisearch_index_prefix.as_deref(),
-    )
-    .await?;
-
-    log::info!(target: "file_driver", temp_base_path:?, file_base_path:?; "Creating file driver.");
     let file_driver = LocalFileSystem::new(temp_base_path, file_base_path).await?;
 
     let rocket = rocket.register("/", catchers![default_catcher]);
-    let rocket = rocket.manage(search_service.clone());
-    let rocket =
-        services::register_services(rocket, db_pool, search_service, Arc::new(file_driver));
+    let rocket = services::register_search_service(rocket, &app_config).await?;
+    let rocket = services::register_services(rocket, db_pool, Arc::new(file_driver));
+    let rocket = fairings::register_fairings(rocket, &app_config);
     let rocket = routes::register_routes(rocket);
 
-    let staging_file_remover = StagingFileRemover::new(
-        Duration::new(app_config.expired_staging_file_removal_period as i64, 0).unwrap(),
-        Duration::new(app_config.expired_staging_file_expiration as i64, 0).unwrap(),
-        rocket.state::<Arc<StagingFileService>>().unwrap().clone(),
-    );
-
-    let rocket = rocket.attach(staging_file_remover);
     let rocket = rocket.manage(app_config);
 
     Ok(rocket)
