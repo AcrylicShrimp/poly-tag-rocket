@@ -341,7 +341,7 @@ impl SearchService {
         let array_filter = array_filter.iter().map(|s| s.as_str()).collect();
 
         let query = self
-            .collections_index
+            .files_index
             .search()
             .with_query(q)
             .with_array_filter(array_filter)
@@ -359,8 +359,8 @@ impl SearchService {
         let result = match result {
             Ok(result) => result,
             Err(err) => {
-                let index_uid = &self.collections_index.uid;
-                log::error!(target: "search_service", index_uid, q, err:err; "Failed to search collections.");
+                let index_uid = &self.files_index.uid;
+                log::error!(target: "search_service", index_uid, q, err:err; "Failed to search files.");
                 return Err(err.into());
             }
         };
