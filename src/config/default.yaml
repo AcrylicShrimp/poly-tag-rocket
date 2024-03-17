@@ -37,6 +37,13 @@ remove_expired_staging_files_period: 3600
 # The expiration is in seconds.
 expired_staging_file_expiration: 86400
 
+# The initial user to create.
+# This initial user will be created when the application starts, if it does not exist.
+initial_user:
+  username: "username"
+  email: "username@example.com"
+  password: "password"
+
 # The limits for the application.
 limits:
   form: 32KiB

@@ -14,6 +14,13 @@ use std::{
 };
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct InitialUser {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AppLimit {
     #[serde(default = "app_limit_defaults::form")]
     pub form: ByteUnit,
@@ -121,6 +128,10 @@ pub struct AppConfig {
     /// The expiration is in seconds.
     #[serde(default = "app_config_defaults::expired_staging_file_expiration")]
     pub expired_staging_file_expiration: u64,
+    /// The initial user to create.
+    /// This initial user will be created when the application starts, if it does not exist.
+    #[serde(default)]
+    pub initial_user: Option<InitialUser>,
     /// The limits for the application.
     #[serde(default)]
     pub limits: AppLimit,
