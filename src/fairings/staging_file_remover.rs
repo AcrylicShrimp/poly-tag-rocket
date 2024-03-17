@@ -10,21 +10,15 @@ use std::sync::Arc;
 pub struct StagingFileRemover {
     period: Duration,
     expiration: Duration,
-    staging_file_service: Arc<StagingFileService>,
     stop_signal_sender: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     task_join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl StagingFileRemover {
-    pub fn new(
-        period: Duration,
-        expiration: Duration,
-        staging_file_service: Arc<StagingFileService>,
-    ) -> Self {
+    pub fn new(period: Duration, expiration: Duration) -> Self {
         StagingFileRemover {
             period,
             expiration,
-            staging_file_service,
             stop_signal_sender: Mutex::new(None),
             task_join_handle: Mutex::new(None),
         }
@@ -40,14 +34,14 @@ impl Fairing for StagingFileRemover {
         }
     }
 
-    async fn on_liftoff(&self, _rocket: &Rocket<Orbit>) {
+    async fn on_liftoff(&self, rocket: &Rocket<Orbit>) {
         let period = self.period;
         let expiration = self.expiration;
 
         log::info!(target: "staging_file_remover", period:%, expiration:%; "Starting staging file remover.");
 
         let (stop_signal_sender, stop_signal_receiver) = tokio::sync::oneshot::channel();
-        let staging_file_service = self.staging_file_service.clone();
+        let staging_file_service = rocket.state::<Arc<StagingFileService>>().unwrap().clone();
 
         let task_join_handle = tokio::spawn(remove_expired_staging_files_task(
             stop_signal_receiver,
