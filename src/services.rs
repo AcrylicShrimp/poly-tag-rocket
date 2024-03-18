@@ -2,6 +2,7 @@ mod auth_service;
 mod collection_service;
 mod file_driver;
 mod file_service;
+mod metric_service;
 mod password_service;
 mod search_service;
 mod staging_file_service;
@@ -11,6 +12,7 @@ pub use auth_service::*;
 pub use collection_service::*;
 pub use file_driver::*;
 pub use file_service::*;
+pub use metric_service::*;
 pub use password_service::*;
 pub use search_service::*;
 pub use staging_file_service::*;
@@ -19,7 +21,7 @@ pub use user_service::*;
 use crate::config::AppConfig;
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection};
 use rocket::{Build, Rocket};
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 pub async fn register_search_service(
     rocket: Rocket<Build>,
@@ -38,6 +40,7 @@ pub async fn register_search_service(
 pub fn register_services(
     rocket: Rocket<Build>,
     db_pool: Pool<AsyncPgConnection>,
+    file_base_path: impl Into<PathBuf>,
     file_driver: Arc<impl 'static + FileDriver + Send + Sync>,
 ) -> Rocket<Build> {
     let search_service = rocket.state::<Arc<SearchService>>().unwrap();
@@ -53,6 +56,7 @@ pub fn register_services(
         file_driver,
     );
     let user_service = UserService::new(db_pool, password_service.clone());
+    let metric_service = MetricService::new(file_base_path);
 
     rocket
         .manage(password_service)
@@ -61,4 +65,5 @@ pub fn register_services(
         .manage(staging_file_service)
         .manage(file_service)
         .manage(user_service)
+        .manage(metric_service)
 }

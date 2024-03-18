@@ -283,7 +283,8 @@ pub async fn setup_rocket_instance(
 
     let rocket = rocket.register("/", catchers![default_catcher]);
     let rocket = services::register_search_service(rocket, &app_config).await?;
-    let rocket = services::register_services(rocket, db_pool, Arc::new(file_driver));
+    let rocket =
+        services::register_services(rocket, db_pool, file_base_path, Arc::new(file_driver));
     let rocket = fairings::register_fairings(rocket, &app_config);
     let rocket = routes::register_routes(rocket);
 
