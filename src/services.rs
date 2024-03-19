@@ -1,4 +1,5 @@
 mod auth_service;
+mod collection_file_pair_service;
 mod collection_service;
 mod file_driver;
 mod file_service;
@@ -9,6 +10,7 @@ mod staging_file_service;
 mod user_service;
 
 pub use auth_service::*;
+pub use collection_file_pair_service::*;
 pub use collection_service::*;
 pub use file_driver::*;
 pub use file_service::*;

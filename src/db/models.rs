@@ -106,6 +106,24 @@ pub struct CreatingFile<'a> {
 }
 
 #[derive(Serialize, Deserialize, Selectable, Queryable, Identifiable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::collection_file_pairs)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(primary_key(collection_id, file_id))]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionFilePair {
+    pub collection_id: Uuid,
+    pub file_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, Insertable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::collection_file_pairs)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CreatingCollectionFilePair {
+    pub collection_id: Uuid,
+    pub file_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, Selectable, Queryable, Identifiable, Debug, Clone, PartialEq)]
 #[diesel(table_name = crate::db::schema::staging_files)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 #[serde(rename_all = "camelCase")]

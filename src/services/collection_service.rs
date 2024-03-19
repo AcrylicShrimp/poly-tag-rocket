@@ -1,6 +1,7 @@
 use super::SearchService;
 use crate::db::models::{Collection, CreatingCollection, UpdatingCollection};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use chrono::NaiveDateTime;
+use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 use std::sync::Arc;
 use thiserror::Error;
@@ -88,15 +89,15 @@ impl CollectionService {
 
     /// Retrieves a list of collections.
     /// The result will be sorted by name and ID (name first) in ascending order.
-    /// If `last_collection_id` is provided, the result will start after the collection with that ID.
+    /// If `last_item` is provided, the result will start after the item.
     pub async fn get_collections(
         &self,
-        last_collection_id: Option<Uuid>,
+        last_item: Option<(NaiveDateTime, Uuid)>,
         limit: u32,
     ) -> Result<Vec<Collection>, CollectionServiceError> {
         use crate::db::schema;
-
         let db = &mut self.db_pool.get().await?;
+
         let query = schema::collections::dsl::collections
             .select((
                 schema::collections::id,
@@ -105,13 +106,20 @@ impl CollectionService {
                 schema::collections::created_at,
             ))
             .order((
-                schema::collections::name.asc(),
+                schema::collections::created_at.asc(),
                 schema::collections::id.asc(),
             ))
             .limit(limit as i64);
-        let collections = match last_collection_id {
-            Some(last_collection_id) => query
-                .filter(schema::collections::id.gt(last_collection_id))
+
+        let collections = match last_item {
+            Some((last_item_created_at, last_item_id)) => query
+                .filter(
+                    schema::collections::created_at.gt(last_item_created_at).or(
+                        schema::collections::created_at
+                            .eq(last_item_created_at)
+                            .and(schema::collections::id.gt(last_item_id)),
+                    ),
+                )
                 .load::<Collection>(db),
             None => query.load::<Collection>(db),
         };

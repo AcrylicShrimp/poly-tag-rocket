@@ -8,3 +8,5 @@ CREATE TABLE files (
   hash BIGINT NOT NULL, -- sha256
   uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX ON files(uploaded_at ASC, id ASC);

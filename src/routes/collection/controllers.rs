@@ -1,13 +1,17 @@
 use super::dto::{
-    CollectionList, CollectionSearchResult, CreatingCollection, SearchingCollection,
-    UpdatingCollection,
+    AddingCollectionFile, CollectionList, CollectionSearchResult, CreatingCollection,
+    SearchingCollection, UpdatingCollection,
 };
 use crate::{
-    db::models::Collection,
-    dto::JsonRes,
+    db::models::{Collection, CollectionFilePair},
+    dto::{Error, JsonRes},
     guards::AuthUserSession,
-    services::{CollectionService, SearchService},
+    services::{
+        AddFileToCollectionError, CollectionFilePairService, CollectionService,
+        RemoveFileFromCollectionError, SearchService,
+    },
 };
+use chrono::{DateTime, NaiveDateTime, Utc};
 use rocket::{
     delete, get, http::Status, post, put, routes, serde::json::Json, Build, Rocket, State,
 };
@@ -19,7 +23,9 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
         "/collections",
         routes![
             create_collection,
+            add_file_to_collection,
             remove_collection,
+            remove_file_from_collection,
             search_collections,
             get_collections,
             get_collection,
@@ -50,6 +56,43 @@ async fn create_collection(
     Ok((Status::Created, Json(collection)))
 }
 
+#[post("/<collection_id>/files", data = "<body>")]
+async fn add_file_to_collection(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    collection_file_pair_service: &State<Arc<CollectionFilePairService>>,
+    collection_id: Uuid,
+    body: Json<AddingCollectionFile>,
+) -> JsonRes<CollectionFilePair> {
+    let pair = collection_file_pair_service
+        .add_file_to_collection(collection_id, body.file_id)
+        .await;
+
+    let pair = match pair {
+        Ok(pair) => pair,
+        Err(err) => match err {
+            AddFileToCollectionError::AlreadyExists { .. } => {
+                return Err(Error::new_dynamic(Status::Conflict, err.to_string()));
+            }
+            AddFileToCollectionError::InvalidCollection { .. } => {
+                return Err(Error::new_dynamic(Status::NotFound, err.to_string()));
+            }
+            AddFileToCollectionError::InvalidFile { .. } => {
+                return Err(Error::new_dynamic(
+                    Status::UnprocessableEntity,
+                    err.to_string(),
+                ));
+            }
+            AddFileToCollectionError::Error(err) => {
+                let body = body.into_inner();
+                log::error!(target: "routes::collection::controllers", controller = "add_file_to_collection", service = "CollectionFilePairService", collection_id:serde, body:serde, err:err; "Error returned from service.");
+                return Err(Status::InternalServerError.into());
+            }
+        },
+    };
+
+    Ok((Status::Created, Json(pair)))
+}
+
 #[delete("/<collection_id>")]
 async fn remove_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -74,6 +117,36 @@ async fn remove_collection(
     Ok((Status::Ok, Json(collection)))
 }
 
+#[delete("/<collection_id>/files/<file_id>")]
+async fn remove_file_from_collection(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    collection_file_pair_service: &State<Arc<CollectionFilePairService>>,
+    collection_id: Uuid,
+    file_id: Uuid,
+) -> JsonRes<Option<CollectionFilePair>> {
+    let pair = collection_file_pair_service
+        .remove_file_from_collection(collection_id, file_id)
+        .await;
+
+    let pair = match pair {
+        Ok(pair) => pair,
+        Err(err) => match err {
+            RemoveFileFromCollectionError::InvalidCollection { .. } => {
+                return Err(Error::new_dynamic(Status::NotFound, err.to_string()));
+            }
+            RemoveFileFromCollectionError::InvalidFile { .. } => {
+                return Err(Error::new_dynamic(Status::NotFound, err.to_string()));
+            }
+            RemoveFileFromCollectionError::Error(err) => {
+                log::error!(target: "routes::collection::controllers", controller = "remove_file_from_collection", service = "CollectionFilePairService", collection_id:serde, file_id:serde, err:err; "Error returned from service.");
+                return Err(Status::InternalServerError.into());
+            }
+        },
+    };
+
+    Ok((Status::Ok, Json(pair)))
+}
+
 #[post("/search", data = "<body>")]
 async fn search_collections(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -94,13 +167,23 @@ async fn search_collections(
     Ok((Status::Ok, Json(CollectionSearchResult { collections })))
 }
 
-#[get("/?<last_collection_id>&<limit>")]
+#[get("/?<last_item_created_at>&<last_item_id>&<limit>")]
 async fn get_collections(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
-    last_collection_id: Option<Uuid>,
+    last_item_created_at: Option<DateTime<Utc>>,
+    last_item_id: Option<Uuid>,
     limit: Option<u32>,
 ) -> JsonRes<CollectionList> {
+    let last_item = match (last_item_created_at, last_item_id) {
+        (Some(last_item_created_at), Some(last_item_id)) => {
+            Some((last_item_created_at, last_item_id))
+        }
+        (Some(last_item_created_at), None) => Some((last_item_created_at, Default::default())),
+        (None, Some(last_item_id)) => Some((Default::default(), last_item_id)),
+        _ => None,
+    };
+
     let limit = limit.unwrap_or(25);
     let limit = u32::max(1, limit);
     let limit = u32::min(limit, 100);

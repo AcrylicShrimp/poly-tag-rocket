@@ -8,3 +8,4 @@ CREATE TABLE collections (
 );
 
 CREATE INDEX ON collections(name);
+CREATE INDEX ON collections(created_at ASC, id ASC);
