@@ -1,5 +1,4 @@
 use crate::db::models::Collection;
-use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -33,7 +32,6 @@ pub struct CollectionSearchResult {
 #[derive(Serialize, Deserialize)]
 pub struct CollectionList {
     pub collections: Vec<Collection>,
-    pub last_collection_created_at: Option<NaiveDateTime>,
     pub last_collection_id: Option<Uuid>,
     pub limit: u32,
 }

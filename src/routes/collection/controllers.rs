@@ -11,7 +11,6 @@ use crate::{
         RemoveFileFromCollectionError, SearchService,
     },
 };
-use chrono::{DateTime, NaiveDateTime, Utc};
 use rocket::{
     delete, get, http::Status, post, put, routes, serde::json::Json, Build, Rocket, State,
 };
@@ -167,27 +166,16 @@ async fn search_collections(
     Ok((Status::Ok, Json(CollectionSearchResult { collections })))
 }
 
-#[get("/?<last_item_created_at>&<last_item_id>&<limit>")]
+#[get("/?<last_collection_id>&<limit>")]
 async fn get_collections(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
     collection_service: &State<Arc<CollectionService>>,
-    last_item_created_at: Option<DateTime<Utc>>,
-    last_item_id: Option<Uuid>,
+    last_collection_id: Option<Uuid>,
     limit: Option<u32>,
 ) -> JsonRes<CollectionList> {
-    let last_item = match (last_item_created_at, last_item_id) {
-        (Some(last_item_created_at), Some(last_item_id)) => {
-            Some((last_item_created_at, last_item_id))
-        }
-        (Some(last_item_created_at), None) => Some((last_item_created_at, Default::default())),
-        (None, Some(last_item_id)) => Some((Default::default(), last_item_id)),
-        _ => None,
-    };
-
     let limit = limit.unwrap_or(25);
     let limit = u32::max(1, limit);
     let limit = u32::min(limit, 100);
-
     let collections = collection_service
         .get_collections(last_collection_id, limit)
         .await;

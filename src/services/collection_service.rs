@@ -89,14 +89,24 @@ impl CollectionService {
 
     /// Retrieves a list of collections.
     /// The result will be sorted by name and ID (name first) in ascending order.
-    /// If `last_item` is provided, the result will start after the item.
+    /// If `last_collection_id` is provided, the result will start from the collection that comes after it.
     pub async fn get_collections(
         &self,
-        last_item: Option<(NaiveDateTime, Uuid)>,
+        last_collection_id: Option<Uuid>,
         limit: u32,
     ) -> Result<Vec<Collection>, CollectionServiceError> {
         use crate::db::schema;
         let db = &mut self.db_pool.get().await?;
+
+        let last_collection = match last_collection_id {
+            Some(last_collection_id) => schema::collections::table
+                .select((schema::collections::created_at, schema::collections::id))
+                .filter(schema::collections::id.eq(last_collection_id))
+                .first::<(NaiveDateTime, Uuid)>(db)
+                .await
+                .optional()?,
+            None => None,
+        };
 
         let query = schema::collections::dsl::collections
             .select((
@@ -111,13 +121,13 @@ impl CollectionService {
             ))
             .limit(limit as i64);
 
-        let collections = match last_item {
-            Some((last_item_created_at, last_item_id)) => query
+        let collections = match last_collection {
+            Some((created_at, id)) => query
                 .filter(
-                    schema::collections::created_at.gt(last_item_created_at).or(
+                    schema::collections::created_at.gt(created_at).or(
                         schema::collections::created_at
-                            .eq(last_item_created_at)
-                            .and(schema::collections::id.gt(last_item_id)),
+                            .eq(created_at)
+                            .and(schema::collections::id.gt(id)),
                     ),
                 )
                 .load::<Collection>(db),
