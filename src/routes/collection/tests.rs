@@ -110,7 +110,7 @@ async fn test_get_collections() {
     let (_initial_user, initial_user_session) =
         create_initial_user(auth_service, user_service).await;
 
-    let collection = vec![
+    let collections = vec![
         collection_service
             .create_collection("collection0", Some("collection0 description"))
             .await
@@ -126,7 +126,7 @@ async fn test_get_collections() {
     ];
 
     let response = client
-        .get(format!("/collections?limit={}", collection.len()))
+        .get(format!("/collections?limit={}", collections.len()))
         .header(Accept::JSON)
         .header(ContentType::JSON)
         .header(Header::new(
@@ -140,10 +140,10 @@ async fn test_get_collections() {
     let retrieved_collections = response.into_json::<CollectionList>().await.unwrap();
 
     assert_eq!(status, Status::Ok);
-    assert_eq!(retrieved_collections.collections.len(), collection.len());
+    assert_eq!(retrieved_collections.collections.len(), collections.len());
     assert_eq!(retrieved_collections.last_collection_id, None);
-    assert_eq!(retrieved_collections.limit, collection.len() as u32);
-    assert_eq!(retrieved_collections.collections, collection);
+    assert_eq!(retrieved_collections.limit, collections.len() as u32);
+    assert_eq!(retrieved_collections.collections, collections);
 
     let raw_retrieved_collections = collection_service
         .get_collections(
