@@ -57,6 +57,7 @@ pub fn register_services(
         search_service.clone(),
         file_driver,
     );
+    let collection_file_pair_service = CollectionFilePairService::new(db_pool.clone());
     let user_service = UserService::new(db_pool, password_service.clone());
     let metric_service = MetricService::new(file_base_path);
 
@@ -66,6 +67,7 @@ pub fn register_services(
         .manage(collection_service)
         .manage(staging_file_service)
         .manage(file_service)
+        .manage(collection_file_pair_service)
         .manage(user_service)
         .manage(metric_service)
 }
