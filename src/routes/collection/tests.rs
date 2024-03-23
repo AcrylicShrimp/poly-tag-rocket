@@ -157,6 +157,93 @@ async fn test_get_collections() {
 }
 
 #[rocket::async_test]
+async fn test_get_collections_paginations() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let collections = vec![
+        collection_service
+            .create_collection("collection0", Some("collection0 description"))
+            .await
+            .unwrap(),
+        collection_service
+            .create_collection("collection1", Some("collection1 description"))
+            .await
+            .unwrap(),
+        collection_service
+            .create_collection("collection2", Some("collection2 description"))
+            .await
+            .unwrap(),
+        collection_service
+            .create_collection("collection3", Some("collection3 description"))
+            .await
+            .unwrap(),
+        collection_service
+            .create_collection("collection4", Some("collection4 description"))
+            .await
+            .unwrap(),
+        collection_service
+            .create_collection("collection5", Some("collection5 description"))
+            .await
+            .unwrap(),
+    ];
+
+    for index in 0..=collections.len() {
+        let url = if index == 0 {
+            format!("/collections?limit={}", collections.len())
+        } else {
+            format!(
+                "/collections?last_collection_id={}&limit={}",
+                collections[index - 1].id,
+                collections.len()
+            )
+        };
+
+        let response = client
+            .get(url)
+            .header(Accept::JSON)
+            .header(ContentType::JSON)
+            .header(Header::new(
+                "Authorization",
+                format!("Bearer {}", initial_user_session.token),
+            ))
+            .dispatch()
+            .await;
+
+        let status = response.status();
+        let retrieved_collections = response.into_json::<CollectionList>().await.unwrap();
+
+        assert_eq!(status, Status::Ok);
+        assert_eq!(retrieved_collections.collections, collections[index..]);
+        assert_eq!(
+            retrieved_collections.last_collection_id,
+            if index == 0 {
+                None
+            } else {
+                Some(collections[index - 1].id)
+            }
+        );
+        assert_eq!(retrieved_collections.limit, collections.len() as u32);
+
+        let raw_retrieved_collections = collection_service
+            .get_collections(
+                retrieved_collections.last_collection_id,
+                retrieved_collections.limit,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(raw_retrieved_collections, retrieved_collections.collections);
+    }
+}
+
+#[rocket::async_test]
 async fn test_get_collection() {
     let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
     let client = Client::tracked(rocket).await.unwrap();
