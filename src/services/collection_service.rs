@@ -98,16 +98,6 @@ impl CollectionService {
         use crate::db::schema;
         let db = &mut self.db_pool.get().await?;
 
-        let last_collection = match last_collection_id {
-            Some(last_collection_id) => schema::collections::table
-                .select((schema::collections::created_at, schema::collections::id))
-                .filter(schema::collections::id.eq(last_collection_id))
-                .first::<(NaiveDateTime, Uuid)>(db)
-                .await
-                .optional()?,
-            None => None,
-        };
-
         let query = schema::collections::dsl::collections
             .select((
                 schema::collections::id,
@@ -121,16 +111,30 @@ impl CollectionService {
             ))
             .limit(limit as i64);
 
-        let collections = match last_collection {
-            Some((created_at, id)) => query
-                .filter(
-                    schema::collections::created_at.gt(created_at).or(
+        let collections = match last_collection_id {
+            Some(last_collection_id) => {
+                let last_collection = schema::collections::dsl::collections
+                    .select((schema::collections::created_at, schema::collections::id))
+                    .filter(schema::collections::id.eq(last_collection_id))
+                    .first::<(NaiveDateTime, Uuid)>(db)
+                    .await
+                    .optional()?;
+
+                let (last_collection_created_at, last_collection_id) = match last_collection {
+                    Some((created_at, id)) => (created_at, id),
+                    None => return Ok(Vec::new()),
+                };
+
+                query
+                    .filter(
                         schema::collections::created_at
-                            .eq(created_at)
-                            .and(schema::collections::id.gt(id)),
-                    ),
-                )
-                .load::<Collection>(db),
+                            .gt(last_collection_created_at)
+                            .or(schema::collections::created_at
+                                .eq(last_collection_created_at)
+                                .and(schema::collections::id.gt(last_collection_id))),
+                    )
+                    .load::<Collection>(db)
+            }
             None => query.load::<Collection>(db),
         };
         let collections = collections.await?;
