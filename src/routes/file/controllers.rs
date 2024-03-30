@@ -1,4 +1,4 @@
-use super::dto::{FileData, FileSearchResult, SearchingFile};
+use super::dto::{FileData, FileList, FileSearchResult, SearchingFile};
 use crate::{
     db::models::File,
     dto::{Error, JsonRes},
@@ -22,6 +22,7 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
             create_file,
             remove_file,
             search_files,
+            get_files,
             get_file,
             get_file_data
         ],
@@ -114,6 +115,36 @@ async fn search_files(
     };
 
     Ok((Status::Ok, Json(FileSearchResult { files })))
+}
+
+#[get("/?<last_file_id>&<limit>")]
+async fn get_files(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    file_service: &State<Arc<FileService>>,
+    last_file_id: Option<Uuid>,
+    limit: Option<u32>,
+) -> JsonRes<FileList> {
+    let limit = limit.unwrap_or(25);
+    let limit = u32::max(1, limit);
+    let limit = u32::min(limit, 100);
+    let files = file_service.get_files(last_file_id, limit).await;
+
+    let files = match files {
+        Ok(files) => files,
+        Err(err) => {
+            log::error!(target: "routes::file::controllers", controller = "get_files", service = "FileService", last_file_id:serde, limit, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((
+        Status::Ok,
+        Json(FileList {
+            files,
+            last_file_id,
+            limit,
+        }),
+    ))
 }
 
 #[get("/<file_id>")]

@@ -8,6 +8,7 @@ use rocket::{
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tokio::io::AsyncRead;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub struct CreatingFile<'a> {
@@ -27,6 +28,13 @@ pub struct SearchingFile<'a> {
 #[derive(Serialize, Deserialize)]
 pub struct FileSearchResult {
     pub files: Vec<File>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct FileList {
+    pub files: Vec<File>,
+    pub last_file_id: Option<Uuid>,
+    pub limit: u32,
 }
 
 pub struct FileData {
