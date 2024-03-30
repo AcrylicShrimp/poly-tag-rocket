@@ -9,11 +9,6 @@ pub struct CreatingCollection<'a> {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct AddingCollectionFile {
-    pub file_id: Uuid,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct SearchingCollection<'a> {
     pub query: &'a str,
 }
@@ -34,4 +29,9 @@ pub struct CollectionList {
     pub collections: Vec<Collection>,
     pub last_collection_id: Option<Uuid>,
     pub limit: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AddingCollectionFile {
+    pub file_id: Uuid,
 }
