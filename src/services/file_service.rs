@@ -5,7 +5,7 @@ use super::{
     FileDriver, ReadError, ReadRange, SearchService, StagingFileService, StagingFileServiceError,
 };
 use crate::db::models::{CreatingFile, File};
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{
     pooled_connection::deadpool::Pool, scoped_futures::ScopedFutureExt, AsyncConnection,
     AsyncPgConnection, RunQueryDsl,
@@ -165,6 +165,65 @@ impl FileService {
         }
 
         Ok(file)
+    }
+
+    /// Retrieves a list of files.
+    /// The result will be sorted by name and ID (name first) in ascending order.
+    /// If `last_file_id` is provided, the result will start from the file that comes after it.
+    pub async fn get_files(
+        &self,
+        last_file_id: Option<Uuid>,
+        limit: u32,
+    ) -> Result<Vec<File>, FileServiceError> {
+        use crate::db::schema;
+        let db = &mut self.db_pool.get().await?;
+
+        let query = schema::files::dsl::files
+            .select((
+                schema::files::id,
+                schema::files::name,
+                schema::files::mime,
+                schema::files::size,
+                schema::files::hash,
+                schema::files::uploaded_at,
+            ))
+            .order((schema::files::name.asc(), schema::files::id.asc()))
+            .limit(limit as i64);
+
+        let last_file = match last_file_id {
+            Some(last_file_id) => {
+                let last_file = schema::files::dsl::files
+                    .select((schema::files::name, schema::files::id))
+                    .filter(schema::files::id.eq(last_file_id))
+                    .get_result::<(String, Uuid)>(db)
+                    .await
+                    .optional()?;
+
+                let last_file = match last_file {
+                    Some(pair) => pair,
+                    None => return Ok(Vec::new()),
+                };
+
+                Some(last_file)
+            }
+            None => None,
+        };
+
+        let files = match &last_file {
+            Some((last_file_name, last_file_id)) => query
+                .filter(
+                    schema::files::name
+                        .gt(last_file_name)
+                        .or(schema::files::name
+                            .eq(last_file_name)
+                            .and(schema::files::id.gt(last_file_id))),
+                )
+                .load::<File>(db),
+            None => query.load::<File>(db),
+        };
+        let files = files.await?;
+
+        Ok(files)
     }
 
     /// Retrieves a file by its ID.
