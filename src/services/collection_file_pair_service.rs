@@ -188,17 +188,22 @@ impl CollectionFilePairService {
         Ok(pair)
     }
 
+    /// Retrieves a list of files in a collection.
+    /// The result will be sorted by name and ID (name first) in ascending order.
+    /// If `last_file_id` is provided, the result will start from the file that comes after it.
     pub async fn get_files_in_collection(
         &self,
         collection_id: Uuid,
         last_file_id: Option<Uuid>,
         limit: u32,
-    ) -> Result<Vec<Uuid>, CollectionFilePairServiceError> {
+    ) -> Result<Vec<File>, CollectionFilePairServiceError> {
         use crate::db::schema;
 
         let db = &mut self.db_pool.get().await?;
+
         let query = schema::collection_file_pairs::table
             .inner_join(schema::files::table)
+            .filter(schema::collection_file_pairs::collection_id.eq(collection_id))
             .select((
                 schema::files::id,
                 schema::files::name,
@@ -210,11 +215,43 @@ impl CollectionFilePairService {
             .order((schema::files::name.asc(), schema::files::id.asc()))
             .limit(limit as i64);
 
-        let files = schema::collection_file_pairs::dsl::collection_file_pairs
-            .select(schema::collection_file_pairs::file_id)
-            .filter(schema::collection_file_pairs::collection_id.eq(collection_id))
-            .load::<Uuid>(db)
-            .await?;
+        let last_file = match last_file_id {
+            Some(last_file_id) => {
+                let last_file = schema::collection_file_pairs::table
+                    .inner_join(schema::files::table)
+                    .select((schema::files::name, schema::files::id))
+                    .filter(
+                        schema::collection_file_pairs::collection_id
+                            .eq(collection_id)
+                            .and(schema::files::id.eq(last_file_id)),
+                    )
+                    .get_result::<(String, Uuid)>(db)
+                    .await
+                    .optional()?;
+
+                let last_file = match last_file {
+                    Some(pair) => pair,
+                    None => return Ok(Vec::new()),
+                };
+
+                Some(last_file)
+            }
+            None => None,
+        };
+
+        let files = match &last_file {
+            Some((last_file_name, last_file_id)) => query
+                .filter(
+                    schema::files::name
+                        .gt(last_file_name)
+                        .or(schema::files::name
+                            .eq(last_file_name)
+                            .and(schema::files::id.gt(last_file_id))),
+                )
+                .load::<File>(db),
+            None => query.load::<File>(db),
+        };
+        let files = files.await?;
 
         Ok(files)
     }
