@@ -1,9 +1,10 @@
+use super::dto::FileList;
 use crate::{
     db::models::File,
     services::{AuthService, FileService, ReadRange, StagingFileService, UserService},
     test::{
         create_test_rocket_instance,
-        helpers::{create_filled_staging_file, create_initial_user},
+        helpers::{create_file, create_filled_staging_file, create_initial_user},
     },
 };
 use rocket::{
@@ -80,28 +81,16 @@ async fn test_remove_file() {
     let (_initial_user, initial_user_session) =
         create_initial_user(auth_service, user_service).await;
 
-    let filled_staging_file = create_filled_staging_file(
+    let file = create_file(
         &client,
         staging_file_service,
+        &file_service,
         &initial_user_session,
         "file",
         Some("video/mp4"),
         "file content",
     )
     .await;
-
-    let response = client
-        .post(format!("/files/{}", filled_staging_file.id))
-        .header(Accept::JSON)
-        .header(ContentType::JSON)
-        .header(Header::new(
-            "Authorization",
-            format!("Bearer {}", initial_user_session.token),
-        ))
-        .dispatch()
-        .await;
-
-    let file = response.into_json::<File>().await.unwrap();
 
     let response = client
         .delete(format!("/files/{}", file.id))
@@ -130,6 +119,199 @@ async fn test_remove_file() {
         .unwrap();
 
     assert!(raw_removed_file_data.is_none());
+}
+
+#[rocket::async_test]
+async fn test_get_files() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let file_service = client.rocket().state::<Arc<FileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let files = vec![
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file0",
+            Some("video/mp4"),
+            "file0 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file1",
+            Some("image/png"),
+            "file1 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file2",
+            Some("text/plain"),
+            "file2 content",
+        )
+        .await,
+    ];
+
+    let response = client
+        .get(format!("/files?limit={}", files.len()))
+        .header(Accept::JSON)
+        .header(ContentType::JSON)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let retrieved_files = response.into_json::<FileList>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(retrieved_files.last_file_id, None);
+    assert_eq!(retrieved_files.limit, files.len() as u32);
+    assert_eq!(retrieved_files.files, files);
+
+    let raw_retrieved_files = file_service
+        .get_files(retrieved_files.last_file_id, retrieved_files.limit)
+        .await
+        .unwrap();
+
+    assert_eq!(raw_retrieved_files, retrieved_files.files);
+}
+
+#[rocket::async_test]
+async fn test_get_files_paginations() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let file_service = client.rocket().state::<Arc<FileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let files = vec![
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file0",
+            Some("video/mp4"),
+            "file0 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file1",
+            Some("image/png"),
+            "file1 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file2",
+            Some("text/plain"),
+            "file2 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file3",
+            Some("text/html"),
+            "file3 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file4",
+            Some("image/jpeg"),
+            "file4 content",
+        )
+        .await,
+        create_file(
+            &client,
+            staging_file_service,
+            file_service,
+            &initial_user_session,
+            "file5",
+            Some("audio/mpeg"),
+            "file5 content",
+        )
+        .await,
+    ];
+
+    for index in 0..=files.len() {
+        let url = if index == 0 {
+            format!("/files?limit={}", files.len())
+        } else {
+            format!(
+                "/files?last_file_id={}&limit={}",
+                files[index - 1].id,
+                files.len()
+            )
+        };
+
+        let response = client
+            .get(url)
+            .header(Accept::JSON)
+            .header(ContentType::JSON)
+            .header(Header::new(
+                "Authorization",
+                format!("Bearer {}", initial_user_session.token),
+            ))
+            .dispatch()
+            .await;
+
+        let status = response.status();
+        let retrieved_files = response.into_json::<FileList>().await.unwrap();
+
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            retrieved_files.last_file_id,
+            if index == 0 {
+                None
+            } else {
+                Some(files[index - 1].id)
+            }
+        );
+        assert_eq!(retrieved_files.limit, files.len() as u32);
+        assert_eq!(retrieved_files.files, files[index..]);
+
+        let raw_retrieved_files = file_service
+            .get_files(retrieved_files.last_file_id, retrieved_files.limit)
+            .await
+            .unwrap();
+
+        assert_eq!(raw_retrieved_files, retrieved_files.files);
+    }
 }
 
 #[rocket::async_test]

@@ -50,8 +50,8 @@ pub mod helpers {
     };
 
     use crate::{
-        db::models::{StagingFile, User, UserSession},
-        services::{AuthService, StagingFileService, UserService},
+        db::models::{File, StagingFile, User, UserSession},
+        services::{AuthService, FileService, StagingFileService, UserService},
     };
 
     pub async fn create_user(id: &str, user_service: &UserService) -> User {
@@ -109,5 +109,33 @@ pub mod helpers {
         let filled_staging_file = response.into_json::<StagingFile>().await.unwrap();
 
         filled_staging_file
+    }
+
+    pub async fn create_file(
+        client: &Client,
+        staging_file_service: &StagingFileService,
+        file_service: &FileService,
+        user_session: &UserSession,
+        name: impl AsRef<str>,
+        mime: Option<impl AsRef<str>>,
+        file_content: impl AsRef<[u8]>,
+    ) -> File {
+        let staging_file = create_filled_staging_file(
+            client,
+            staging_file_service,
+            user_session,
+            name,
+            mime,
+            file_content,
+        )
+        .await;
+
+        let file = file_service
+            .create_file_from_staging_file_id(staging_file.id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        file
     }
 }
