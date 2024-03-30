@@ -1,6 +1,7 @@
 use super::dto::{
-    AddingCollectionFile, CollectionList, CollectionSearchResult, CreatingCollection,
-    SearchingCollection, UpdatingCollection,
+    AddingCollectionFile, CollectionFileList, CollectionFileSearchResult, CollectionList,
+    CollectionSearchResult, CreatingCollection, SearchingCollection, SearchingCollectionFile,
+    UpdatingCollection,
 };
 use crate::{
     db::models::{Collection, CollectionFilePair},
@@ -29,6 +30,8 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
             update_collection,
             add_file_to_collection,
             remove_file_from_collection,
+            search_files_in_collection,
+            get_files_in_collection,
         ],
     )
 }
@@ -246,4 +249,67 @@ async fn remove_file_from_collection(
     };
 
     Ok((Status::Ok, Json(pair)))
+}
+
+#[post("/<collection_id>/files/search", data = "<body>")]
+async fn search_files_in_collection(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    search_service: &State<Arc<SearchService>>,
+    collection_id: Uuid,
+    body: Json<SearchingCollectionFile<'_>>,
+) -> JsonRes<CollectionFileSearchResult> {
+    let files = search_service
+        .search_collection_files(
+            collection_id,
+            body.query,
+            body.filter_mime,
+            body.filter_size,
+            body.filter_hash,
+            body.filter_uploaded_at,
+        )
+        .await;
+
+    let files = match files {
+        Ok(files) => files,
+        Err(err) => {
+            let body = body.into_inner();
+            log::error!(target: "routes::file::controllers", controller = "search_files_in_collection", service = "SearchService", body:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((Status::Ok, Json(CollectionFileSearchResult { files })))
+}
+
+#[get("/<collection_id>/files?<last_file_id>&<limit>")]
+async fn get_files_in_collection(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    collection_file_pair_service: &State<Arc<CollectionFilePairService>>,
+    collection_id: Uuid,
+    last_file_id: Option<Uuid>,
+    limit: Option<u32>,
+) -> JsonRes<CollectionFileList> {
+    let limit = limit.unwrap_or(25);
+    let limit = u32::max(1, limit);
+    let limit = u32::min(limit, 100);
+    let files = collection_file_pair_service
+        .get_files_in_collection(collection_id, last_file_id, limit)
+        .await;
+
+    let files = match files {
+        Ok(files) => files,
+        Err(err) => {
+            log::error!(target: "routes::collection::controllers", controller = "get_files_in_collection", service = "CollectionFilePairService", collection_id:serde, last_file_id:serde, limit, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((
+        Status::Ok,
+        Json(CollectionFileList {
+            files,
+            last_file_id,
+            limit,
+        }),
+    ))
 }
