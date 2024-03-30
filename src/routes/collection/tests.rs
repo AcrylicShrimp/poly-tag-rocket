@@ -140,7 +140,6 @@ async fn test_get_collections() {
     let retrieved_collections = response.into_json::<CollectionList>().await.unwrap();
 
     assert_eq!(status, Status::Ok);
-    assert_eq!(retrieved_collections.collections.len(), collections.len());
     assert_eq!(retrieved_collections.last_collection_id, None);
     assert_eq!(retrieved_collections.limit, collections.len() as u32);
     assert_eq!(retrieved_collections.collections, collections);
@@ -220,7 +219,6 @@ async fn test_get_collections_paginations() {
         let retrieved_collections = response.into_json::<CollectionList>().await.unwrap();
 
         assert_eq!(status, Status::Ok);
-        assert_eq!(retrieved_collections.collections, collections[index..]);
         assert_eq!(
             retrieved_collections.last_collection_id,
             if index == 0 {
@@ -230,6 +228,7 @@ async fn test_get_collections_paginations() {
             }
         );
         assert_eq!(retrieved_collections.limit, collections.len() as u32);
+        assert_eq!(retrieved_collections.collections, collections[index..]);
 
         let raw_retrieved_collections = collection_service
             .get_collections(
