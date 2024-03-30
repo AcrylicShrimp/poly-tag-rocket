@@ -1,6 +1,5 @@
 use super::SearchService;
 use crate::db::models::{Collection, CreatingCollection, UpdatingCollection};
-use chrono::NaiveDateTime;
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 use std::sync::Arc;
@@ -106,35 +105,40 @@ impl CollectionService {
                 schema::collections::created_at,
             ))
             .order((
-                schema::collections::created_at.asc(),
+                schema::collections::name.asc(),
                 schema::collections::id.asc(),
             ))
             .limit(limit as i64);
 
-        let collections = match last_collection_id {
+        let last_collection = match last_collection_id {
             Some(last_collection_id) => {
                 let last_collection = schema::collections::dsl::collections
-                    .select((schema::collections::created_at, schema::collections::id))
+                    .select((schema::collections::name, schema::collections::id))
                     .filter(schema::collections::id.eq(last_collection_id))
-                    .first::<(NaiveDateTime, Uuid)>(db)
+                    .get_result::<(String, Uuid)>(db)
                     .await
                     .optional()?;
 
-                let (last_collection_created_at, last_collection_id) = match last_collection {
-                    Some((created_at, id)) => (created_at, id),
+                let last_collection = match last_collection {
+                    Some(pair) => pair,
                     None => return Ok(Vec::new()),
                 };
 
-                query
-                    .filter(
-                        schema::collections::created_at
-                            .gt(last_collection_created_at)
-                            .or(schema::collections::created_at
-                                .eq(last_collection_created_at)
-                                .and(schema::collections::id.gt(last_collection_id))),
-                    )
-                    .load::<Collection>(db)
+                Some(last_collection)
             }
+            None => None,
+        };
+
+        let collections = match &last_collection {
+            Some((last_collection_name, last_collection_id)) => query
+                .filter(
+                    schema::collections::name.gt(last_collection_name).or(
+                        schema::collections::name
+                            .eq(last_collection_name)
+                            .and(schema::collections::id.gt(last_collection_id)),
+                    ),
+                )
+                .load::<Collection>(db),
             None => query.load::<Collection>(db),
         };
         let collections = collections.await?;
