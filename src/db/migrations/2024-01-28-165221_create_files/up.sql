@@ -9,4 +9,4 @@ CREATE TABLE files (
   uploaded_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ON files(uploaded_at ASC, id ASC);
+CREATE INDEX ON files(name ASC, id ASC);

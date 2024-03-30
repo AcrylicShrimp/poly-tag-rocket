@@ -7,5 +7,4 @@ CREATE TABLE collections (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ON collections(name);
-CREATE INDEX ON collections(created_at ASC, id ASC);
+CREATE INDEX ON collections(name ASC, id ASC);
