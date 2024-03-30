@@ -1,4 +1,5 @@
-use crate::db::models::{CollectionFilePair, CreatingCollectionFilePair};
+use super::SearchService;
+use crate::db::models::{CollectionFilePair, CreatingCollectionFilePair, File};
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::{pooled_connection::deadpool::Pool, AsyncPgConnection, RunQueryDsl};
 use std::sync::Arc;
@@ -37,11 +38,15 @@ pub enum RemoveFileFromCollectionError {
 
 pub struct CollectionFilePairService {
     db_pool: Pool<AsyncPgConnection>,
+    search_service: Arc<SearchService>,
 }
 
 impl CollectionFilePairService {
-    pub fn new(db_pool: Pool<AsyncPgConnection>) -> Arc<Self> {
-        Arc::new(Self { db_pool })
+    pub fn new(db_pool: Pool<AsyncPgConnection>, search_service: Arc<SearchService>) -> Arc<Self> {
+        Arc::new(Self {
+            db_pool,
+            search_service,
+        })
     }
 
     /// Adds a file to a collection.
@@ -57,6 +62,27 @@ impl CollectionFilePairService {
             .get()
             .await
             .map_err(CollectionFilePairServiceError::from)?;
+
+        let file = schema::files::dsl::files
+            .select((
+                schema::files::id,
+                schema::files::name,
+                schema::files::mime,
+                schema::files::size,
+                schema::files::hash,
+                schema::files::uploaded_at,
+            ))
+            .filter(schema::files::id.eq(file_id))
+            .get_result::<File>(db)
+            .await
+            .optional()
+            .map_err(CollectionFilePairServiceError::from)?;
+
+        let file = match file {
+            Some(file) => file,
+            None => return Err(AddFileToCollectionError::InvalidFile { file_id }),
+        };
+
         let pair = diesel::insert_into(schema::collection_file_pairs::table)
             .values(CreatingCollectionFilePair {
                 collection_id,
@@ -95,7 +121,11 @@ impl CollectionFilePairService {
             Err(err) => return Err(CollectionFilePairServiceError::from(err).into()),
         };
 
-        // TODO: add the pair to the search index
+        // ignore the error if the indexing fails, as it is not critical
+        self.search_service
+            .index_collection_file(collection_id, &file)
+            .await
+            .ok();
 
         Ok(pair)
     }
@@ -114,6 +144,7 @@ impl CollectionFilePairService {
             .get()
             .await
             .map_err(CollectionFilePairServiceError::from)?;
+
         let pair = diesel::delete(
             schema::collection_file_pairs::dsl::collection_file_pairs.filter(
                 schema::collection_file_pairs::collection_id
@@ -147,7 +178,11 @@ impl CollectionFilePairService {
         };
 
         if pair.is_some() {
-            // TODO: remove the pair from the search index
+            // ignore the error if the indexing fails, as it is not critical
+            self.search_service
+                .remove_collection_file(collection_id, file_id)
+                .await
+                .ok();
         }
 
         Ok(pair)
