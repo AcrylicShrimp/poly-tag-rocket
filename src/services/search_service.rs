@@ -120,8 +120,6 @@ impl<'a> IndexingCollectionFile<'a> {
 
 #[derive(Deserialize)]
 struct IndexedCollectionFile {
-    pub id: String,
-    pub collection_id: Uuid,
     pub file_id: Uuid,
     pub name: String,
     pub mime_full: String,
