@@ -1,6 +1,6 @@
 use crate::db::models::{Collection, File};
 use chrono::{DateTime, NaiveDateTime};
-use meilisearch_sdk::{Client, Index, Selectors};
+use meilisearch_sdk::{Client, DocumentDeletionQuery, Index, Selectors};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
@@ -74,9 +74,82 @@ impl IndexedFile {
     }
 }
 
+#[derive(Serialize)]
+struct IndexingCollectionFile<'a> {
+    pub id: String,
+    pub collection_id: Uuid,
+    pub file_id: Uuid,
+    pub name: &'a str,
+    pub mime_full: &'a str,
+    pub mime_type_part: &'a str,
+    pub mime_subtype_part: Option<&'a str>,
+    pub size: i64,
+    pub hash: i64,
+    pub uploaded_at: i64,
+}
+
+impl<'a> IndexingCollectionFile<'a> {
+    pub fn make_id(collection_id: Uuid, file_id: Uuid) -> String {
+        format!("{}#{}", collection_id, file_id)
+    }
+
+    pub fn from_file(collection_id: Uuid, file: &'a File) -> Self {
+        let id = Self::make_id(collection_id, file.id);
+
+        let (mime_type_part, mime_subtype_part) = match file.mime.trim().split_once('/') {
+            Some((type_part, subtype_part)) => (type_part, Some(subtype_part)),
+            None => (file.mime.as_str(), None),
+        };
+
+        let uploaded_at = file.uploaded_at.and_utc().timestamp_micros();
+
+        Self {
+            id,
+            collection_id,
+            file_id: file.id,
+            name: &file.name,
+            mime_full: &file.mime,
+            mime_type_part,
+            mime_subtype_part,
+            size: file.size,
+            hash: file.hash,
+            uploaded_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct IndexedCollectionFile {
+    pub id: String,
+    pub collection_id: Uuid,
+    pub file_id: Uuid,
+    pub name: String,
+    pub mime_full: String,
+    pub size: i64,
+    pub hash: i64,
+    pub uploaded_at: i64,
+}
+
+impl IndexedCollectionFile {
+    pub fn into_file(self) -> File {
+        let uploaded_at = DateTime::from_timestamp_micros(self.uploaded_at).unwrap();
+        let uploaded_at = uploaded_at.naive_utc();
+
+        File {
+            id: self.file_id,
+            name: self.name,
+            mime: self.mime_full,
+            size: self.size,
+            hash: self.hash,
+            uploaded_at,
+        }
+    }
+}
+
 pub struct SearchService {
     collections_index: Index,
     files_index: Index,
+    collection_files_index: Index,
 }
 
 impl SearchService {
@@ -98,11 +171,14 @@ impl SearchService {
 
         let collections_index_name = make_index_name(&meilisearch_index_prefix, "collections");
         let files_index_name = make_index_name(&meilisearch_index_prefix, "files");
+        let collection_files_index_name =
+            make_index_name(&meilisearch_index_prefix, "collection_files");
 
-        log::info!(target: "search_service", collections_index_name, files_index_name; "Creating indices. It may produce warnings if the indices are not found.");
+        log::info!(target: "search_service", collections_index_name, files_index_name, collection_files_index_name; "Creating indices. It may produce warnings if the indices are not found.");
 
         let collections_index = client.get_index(&collections_index_name).await;
         let files_index = client.get_index(&files_index_name).await;
+        let collection_files_index = client.get_index(&collection_files_index_name).await;
 
         let collections_index = match collections_index {
             Ok(index) => {
@@ -213,9 +289,71 @@ impl SearchService {
             }
         };
 
+        let collection_files_index = match collection_files_index {
+            Ok(index) => {
+                log::info!(target: "search_service", collection_files_index_name; "Index already exists. Skipping creation.");
+                index
+            }
+            // ignore the error, assuming it's because the index doesn't exist
+            Err(_) => {
+                let task = client
+                    .create_index(&collection_files_index_name, Some("id"))
+                    .await;
+                let task = match task {
+                    Ok(task) => task,
+                    Err(err) => {
+                        log::error!(target: "search_service", collection_files_index_name, err:err; "Failed to create index. Aborting.");
+                        return Err(err.into());
+                    }
+                };
+
+                let task = task.wait_for_completion(&client, None, None).await;
+                let task = match task {
+                    Ok(task) => task,
+                    Err(err) => {
+                        log::error!(target: "search_service", collection_files_index_name, err:err; "Failed to wait for index creation. Aborting.");
+                        return Err(err.into());
+                    }
+                };
+
+                let index = match task.try_make_index(&client) {
+                    Ok(index) => index,
+                    Err(_) => {
+                        log::error!(target: "search_service", collection_files_index_name; "Failed to get index. Aborting.");
+                        return Err(SearchServiceError::IndexInTaskNotFound);
+                    }
+                };
+
+                if let Err(err) = index.set_searchable_attributes(["name"]).await {
+                    // failing to set searchable attributes is not a critical error
+                    log::warn!(target: "search_service", collection_files_index_name, err:err; "Failed to set searchable attributes.");
+                }
+
+                if let Err(err) = index
+                    .set_filterable_attributes([
+                        "collection_id",
+                        "file_id",
+                        "mime_full",
+                        "mime_type_part",
+                        "mime_subtype_part",
+                        "size",
+                        "hash",
+                        "uploaded_at",
+                    ])
+                    .await
+                {
+                    // failing to set filterable attributes is not a critical error
+                    log::warn!(target: "search_service", collection_files_index_name, err:err; "Failed to set filterable attributes.");
+                }
+
+                index
+            }
+        };
+
         Ok(Arc::new(Self {
             collections_index,
             files_index,
+            collection_files_index,
         }))
     }
 
@@ -248,6 +386,19 @@ impl SearchService {
         if let Err(err) = self.collections_index.delete_document(collection_id).await {
             let index_uid = &self.collections_index.uid;
             log::error!(target: "search_service", index_uid, collection_id:serde, err:err; "Failed to remove collection.");
+        }
+
+        let filter = format!("collection_id = \"{}\"", collection_id);
+        let mut query = DocumentDeletionQuery::new(&self.collection_files_index);
+        query.with_filter(&filter);
+
+        if let Err(err) = self
+            .collection_files_index
+            .delete_documents_with(&query)
+            .await
+        {
+            let index_uid = &self.collection_files_index.uid;
+            log::error!(target: "search_service", index_uid, collection_id:serde, err:err; "Failed to remove collection files.");
         }
 
         Ok(())
@@ -297,6 +448,19 @@ impl SearchService {
         if let Err(err) = self.files_index.delete_document(file_id).await {
             let index_uid = &self.files_index.uid;
             log::error!(target: "search_service", index_uid, file_id:serde, err:err; "Failed to remove file.");
+        }
+
+        let filter = format!("file_id = \"{}\"", file_id);
+        let mut query = DocumentDeletionQuery::new(&self.collection_files_index);
+        query.with_filter(&filter);
+
+        if let Err(err) = self
+            .collection_files_index
+            .delete_documents_with(&query)
+            .await
+        {
+            let index_uid = &self.collection_files_index.uid;
+            log::error!(target: "search_service", index_uid, file_id:serde, err:err; "Failed to remove collection files.");
         }
 
         Ok(())
@@ -361,6 +525,120 @@ impl SearchService {
             Err(err) => {
                 let index_uid = &self.files_index.uid;
                 log::error!(target: "search_service", index_uid, q, err:err; "Failed to search files.");
+                return Err(err.into());
+            }
+        };
+
+        let hits = result
+            .hits
+            .into_iter()
+            .map(|hit| hit.result.into_file())
+            .collect();
+
+        Ok(hits)
+    }
+
+    /// Indexes a file in a collection.
+    pub async fn index_collection_file(
+        &self,
+        collection_id: Uuid,
+        file: &File,
+    ) -> Result<(), SearchServiceError> {
+        let indexing_file = IndexingCollectionFile::from_file(collection_id, file);
+
+        let result = self
+            .collection_files_index
+            .add_or_replace(&[indexing_file], Some("id"))
+            .await;
+
+        if let Err(err) = result {
+            let index_uid = &self.collection_files_index.uid;
+            log::error!(target: "search_service", index_uid, collection_id:serde, file:serde, err:err; "Failed to add a collection file to index.");
+            return Err(err.into());
+        }
+
+        Ok(())
+    }
+
+    /// Removes a file from a collection in the index.
+    /// It will not fail if the file is not found in the index.
+    pub async fn remove_collection_file(
+        &self,
+        collection_id: Uuid,
+        file_id: Uuid,
+    ) -> Result<(), SearchServiceError> {
+        let id = IndexingCollectionFile::make_id(collection_id, file_id);
+
+        if let Err(err) = self.collection_files_index.delete_document(id).await {
+            let index_uid = &self.collection_files_index.uid;
+            log::error!(target: "search_service", index_uid, collection_id:serde, file_id:serde, err:err; "Failed to remove collection file.");
+        }
+
+        Ok(())
+    }
+
+    /// Searches files in a collection.
+    pub async fn search_collection_files(
+        &self,
+        collection_id: Uuid,
+        q: &str,
+        filter_mime: Option<&str>,
+        filter_size: Option<(u32, u32)>,
+        filter_hash: Option<u32>,
+        filter_uploaded_at: Option<(NaiveDateTime, NaiveDateTime)>,
+    ) -> Result<Vec<File>, SearchServiceError> {
+        let mut array_filter = Vec::with_capacity(5);
+
+        array_filter.push(format!("collection_id = \"{}\"", collection_id));
+
+        if let Some(filter_mime) = filter_mime {
+            array_filter.push(format!(
+                "mime_full = \"{}\" OR mime_type_part = \"{}\" OR mime_subtype_part = \"{}\"",
+                filter_mime, filter_mime, filter_mime
+            ));
+        }
+
+        if let Some(filter_size) = filter_size {
+            array_filter.push(format!("size {} TO {}", filter_size.0, filter_size.1));
+        }
+
+        if let Some(filter_hash) = filter_hash {
+            array_filter.push(format!("hash = {}", filter_hash));
+        }
+
+        if let Some(filter_uploaded_at) = filter_uploaded_at {
+            let start_timestamp = filter_uploaded_at.0.and_utc().timestamp();
+            let end_timestamp = filter_uploaded_at.1.and_utc().timestamp();
+
+            array_filter.push(format!(
+                "uploaded_at {} TO {}",
+                start_timestamp, end_timestamp
+            ));
+        }
+
+        let array_filter = array_filter.iter().map(|s| s.as_str()).collect();
+
+        let query = self
+            .collection_files_index
+            .search()
+            .with_query(q)
+            .with_array_filter(array_filter)
+            .with_attributes_to_retrieve(Selectors::Some(&[
+                "file_id",
+                "name",
+                "mime_full",
+                "size",
+                "hash",
+                "uploaded_at",
+            ]))
+            .build();
+
+        let result = query.execute::<IndexedCollectionFile>().await;
+        let result = match result {
+            Ok(result) => result,
+            Err(err) => {
+                let index_uid = &self.collection_files_index.uid;
+                log::error!(target: "search_service", index_uid, collection_id:serde, q, err:err; "Failed to search collection files.");
                 return Err(err.into());
             }
         };
