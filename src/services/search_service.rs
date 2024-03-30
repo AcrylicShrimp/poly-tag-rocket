@@ -240,7 +240,7 @@ impl SearchService {
     }
 
     /// Removes a collection from the index.
-    /// /// It will not fail if the collection is not found in the index.
+    /// It will not fail if the collection is not found in the index.
     pub async fn remove_collection_by_id(
         &self,
         collection_id: Uuid,
