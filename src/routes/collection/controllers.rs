@@ -280,7 +280,6 @@ async fn search_files_in_collection(
     Ok((Status::Ok, Json(CollectionFileSearchResult { files })))
 }
 
-/// TODO: add a test for this route
 #[get("/<collection_id>/files?<last_file_id>&<limit>")]
 async fn get_files_in_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -314,7 +313,6 @@ async fn get_files_in_collection(
     ))
 }
 
-/// TODO: add a test for this route
 #[get("/<collection_id>/files/<file_id>")]
 async fn get_file_in_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
