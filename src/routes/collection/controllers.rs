@@ -183,7 +183,6 @@ async fn update_collection(
     Ok((Status::Ok, Json(collection)))
 }
 
-/// TODO: add a test for this route
 #[post("/<collection_id>/files", data = "<body>")]
 async fn add_file_to_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -221,7 +220,6 @@ async fn add_file_to_collection(
     Ok((Status::Created, Json(pair)))
 }
 
-/// TODO: add a test for this route
 #[delete("/<collection_id>/files/<file_id>")]
 async fn remove_file_from_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -282,6 +280,7 @@ async fn search_files_in_collection(
     Ok((Status::Ok, Json(CollectionFileSearchResult { files })))
 }
 
+/// TODO: add a test for this route
 #[get("/<collection_id>/files?<last_file_id>&<limit>")]
 async fn get_files_in_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,
@@ -315,6 +314,7 @@ async fn get_files_in_collection(
     ))
 }
 
+/// TODO: add a test for this route
 #[get("/<collection_id>/files/<file_id>")]
 async fn get_file_in_collection(
     #[allow(unused_variables)] sess: AuthUserSession<'_>,

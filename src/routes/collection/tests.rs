@@ -1,8 +1,14 @@
-use super::dto::{CollectionList, CreatingCollection, UpdatingCollection};
+use super::dto::{AddingCollectionFile, CollectionList, CreatingCollection, UpdatingCollection};
 use crate::{
-    db::models::Collection,
-    services::{AuthService, CollectionService, UserService},
-    test::{create_test_rocket_instance, helpers::create_initial_user},
+    db::models::{Collection, CollectionFilePair},
+    services::{
+        AuthService, CollectionFilePairService, CollectionService, FileService, StagingFileService,
+        UserService,
+    },
+    test::{
+        create_test_rocket_instance,
+        helpers::{create_file, create_initial_user},
+    },
 };
 use rocket::{
     http::{Accept, ContentType, Header, Status},
@@ -335,4 +341,136 @@ async fn test_update_collection() {
         .unwrap();
 
     assert_eq!(raw_updated_collection, updated_collection);
+}
+
+#[rocket::async_test]
+async fn test_add_file_to_collection() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
+    let collection_file_pair_service = client
+        .rocket()
+        .state::<Arc<CollectionFilePairService>>()
+        .unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let file_service = client.rocket().state::<Arc<FileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let collection = collection_service
+        .create_collection("collection", Some("collection description"))
+        .await
+        .unwrap();
+
+    let file = create_file(
+        &client,
+        staging_file_service,
+        &file_service,
+        &initial_user_session,
+        "file",
+        Some("video/mp4"),
+        "file content",
+    )
+    .await;
+
+    let response = client
+        .post(format!("/collections/{}/files", collection.id))
+        .header(Accept::JSON)
+        .header(ContentType::JSON)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(serde_json::to_string(&AddingCollectionFile { file_id: file.id }).unwrap())
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let added_collection_file_pair = response.into_json::<CollectionFilePair>().await.unwrap();
+
+    assert_eq!(status, Status::Created);
+    assert_eq!(added_collection_file_pair.collection_id, collection.id);
+    assert_eq!(added_collection_file_pair.file_id, file.id);
+
+    let raw_added_file = collection_file_pair_service
+        .get_file_in_collection_by_id(
+            added_collection_file_pair.collection_id,
+            added_collection_file_pair.file_id,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(raw_added_file, file);
+}
+
+#[rocket::async_test]
+async fn test_remove_file_to_collection() {
+    let (rocket, _database_dropper, _index_dropper) = create_test_rocket_instance().await;
+    let client = Client::tracked(rocket).await.unwrap();
+    let auth_service = client.rocket().state::<Arc<AuthService>>().unwrap();
+    let collection_service = client.rocket().state::<Arc<CollectionService>>().unwrap();
+    let collection_file_pair_service = client
+        .rocket()
+        .state::<Arc<CollectionFilePairService>>()
+        .unwrap();
+    let staging_file_service = client.rocket().state::<Arc<StagingFileService>>().unwrap();
+    let file_service = client.rocket().state::<Arc<FileService>>().unwrap();
+    let user_service = client.rocket().state::<Arc<UserService>>().unwrap();
+
+    let (_initial_user, initial_user_session) =
+        create_initial_user(auth_service, user_service).await;
+
+    let collection = collection_service
+        .create_collection("collection", Some("collection description"))
+        .await
+        .unwrap();
+
+    let file = create_file(
+        &client,
+        staging_file_service,
+        &file_service,
+        &initial_user_session,
+        "file",
+        Some("video/mp4"),
+        "file content",
+    )
+    .await;
+
+    collection_file_pair_service
+        .add_file_to_collection(collection.id, file.id)
+        .await
+        .unwrap();
+
+    let response = client
+        .delete(format!("/collections/{}/files/{}", collection.id, file.id))
+        .header(Accept::JSON)
+        .header(ContentType::JSON)
+        .header(Header::new(
+            "Authorization",
+            format!("Bearer {}", initial_user_session.token),
+        ))
+        .body(serde_json::to_string(&AddingCollectionFile { file_id: file.id }).unwrap())
+        .dispatch()
+        .await;
+
+    let status = response.status();
+    let removed_collection_file_pair = response.into_json::<CollectionFilePair>().await.unwrap();
+
+    assert_eq!(status, Status::Ok);
+    assert_eq!(removed_collection_file_pair.collection_id, collection.id);
+    assert_eq!(removed_collection_file_pair.file_id, file.id);
+
+    let raw_removed_file = collection_file_pair_service
+        .get_file_in_collection_by_id(
+            removed_collection_file_pair.collection_id,
+            removed_collection_file_pair.file_id,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(raw_removed_file, None);
 }
