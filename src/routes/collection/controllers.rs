@@ -4,7 +4,7 @@ use super::dto::{
     UpdatingCollection,
 };
 use crate::{
-    db::models::{Collection, CollectionFilePair},
+    db::models::{Collection, CollectionFilePair, File},
     dto::{Error, JsonRes},
     guards::AuthUserSession,
     services::{
@@ -32,6 +32,7 @@ pub fn register_routes(rocket: Rocket<Build>) -> Rocket<Build> {
             remove_file_from_collection,
             search_files_in_collection,
             get_files_in_collection,
+            get_file_in_collection,
         ],
     )
 }
@@ -312,4 +313,29 @@ async fn get_files_in_collection(
             limit,
         }),
     ))
+}
+
+#[get("/<collection_id>/files/<file_id>")]
+async fn get_file_in_collection(
+    #[allow(unused_variables)] sess: AuthUserSession<'_>,
+    collection_file_pair_service: &State<Arc<CollectionFilePairService>>,
+    collection_id: Uuid,
+    file_id: Uuid,
+) -> JsonRes<File> {
+    let file = collection_file_pair_service
+        .get_file_in_collection_by_id(collection_id, file_id)
+        .await;
+
+    let file = match file {
+        Ok(Some(file)) => file,
+        Ok(None) => {
+            return Err(Status::NotFound.into());
+        }
+        Err(err) => {
+            log::error!(target: "routes::collection::controllers", controller = "get_file_in_collection", service = "CollectionFilePairService", collection_id:serde, file_id:serde, err:err; "Error returned from service.");
+            return Err(Status::InternalServerError.into());
+        }
+    };
+
+    Ok((Status::Ok, Json(file)))
 }

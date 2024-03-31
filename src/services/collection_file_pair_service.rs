@@ -255,4 +255,35 @@ impl CollectionFilePairService {
 
         Ok(files)
     }
+
+    /// Retrieves a file by its ID.
+    pub async fn get_file_in_collection_by_id(
+        &self,
+        collection_id: Uuid,
+        file_id: Uuid,
+    ) -> Result<Option<File>, CollectionFilePairServiceError> {
+        use crate::db::schema;
+
+        let db = &mut self.db_pool.get().await?;
+        let file = schema::collection_file_pairs::table
+            .inner_join(schema::files::table)
+            .filter(
+                schema::collection_file_pairs::collection_id
+                    .eq(collection_id)
+                    .and(schema::collection_file_pairs::file_id.eq(file_id)),
+            )
+            .select((
+                schema::files::id,
+                schema::files::name,
+                schema::files::mime,
+                schema::files::size,
+                schema::files::hash,
+                schema::files::uploaded_at,
+            ))
+            .get_result::<File>(db)
+            .await
+            .optional()?;
+
+        Ok(file)
+    }
 }
