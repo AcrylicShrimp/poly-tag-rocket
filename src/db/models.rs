@@ -151,3 +151,20 @@ pub struct UpdatingStagingFile<'a> {
     pub name: &'a str,
     pub mime: Option<&'a str>,
 }
+
+#[derive(Serialize, Deserialize, Insertable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::tags)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct CreatingTag<'a> {
+    pub name: &'a str,
+    pub file_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, Identifiable, Debug, Clone, PartialEq)]
+#[diesel(table_name = crate::db::schema::tags)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(primary_key(name, file_id))]
+pub struct RemovingTag<'a> {
+    pub name: &'a str,
+    pub file_id: Uuid,
+}

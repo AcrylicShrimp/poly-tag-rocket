@@ -38,6 +38,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    tags (name, file_id) {
+        name -> Text,
+        file_id -> Uuid,
+    }
+}
+
+diesel::table! {
     user_sessions (token) {
         token -> Text,
         user_id -> Int4,
@@ -57,6 +64,7 @@ diesel::table! {
 
 diesel::joinable!(collection_file_pairs -> collections (collection_id));
 diesel::joinable!(collection_file_pairs -> files (file_id));
+diesel::joinable!(tags -> files (file_id));
 diesel::joinable!(user_sessions -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -64,6 +72,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     collections,
     files,
     staging_files,
+    tags,
     user_sessions,
     users,
 );

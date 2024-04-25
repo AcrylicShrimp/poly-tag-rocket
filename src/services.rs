@@ -7,6 +7,7 @@ mod metric_service;
 mod password_service;
 mod search_service;
 mod staging_file_service;
+mod tag_service;
 mod user_service;
 
 pub use auth_service::*;
@@ -18,6 +19,7 @@ pub use metric_service::*;
 pub use password_service::*;
 pub use search_service::*;
 pub use staging_file_service::*;
+pub use tag_service::*;
 pub use user_service::*;
 
 use crate::config::AppConfig;

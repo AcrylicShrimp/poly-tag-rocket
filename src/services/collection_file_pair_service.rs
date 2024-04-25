@@ -109,13 +109,13 @@ impl CollectionFilePairService {
             Err(diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::ForeignKeyViolation,
                 err,
-            )) if err.constraint_name() == Some("collection_fk") => {
+            )) if err.constraint_name() == Some("collection_file_pairs_collection_fk") => {
                 return Err(AddFileToCollectionError::InvalidCollection { collection_id })
             }
             Err(diesel::result::Error::DatabaseError(
                 diesel::result::DatabaseErrorKind::ForeignKeyViolation,
                 err,
-            )) if err.constraint_name() == Some("file_fk") => {
+            )) if err.constraint_name() == Some("collection_file_pairs_file_fk") => {
                 return Err(AddFileToCollectionError::InvalidFile { file_id })
             }
             Err(err) => return Err(CollectionFilePairServiceError::from(err).into()),

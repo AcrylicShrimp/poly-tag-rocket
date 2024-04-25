@@ -75,6 +75,8 @@ impl CollectionService {
         .await
         .optional()?;
 
+        // TODO: handle the case that the collection is unable to be removed due to the presence of files (fk constraint)
+
         if collection.is_some() {
             // ignore the error if the indexing fails, as it is not critical
             self.search_service
